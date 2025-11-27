@@ -421,7 +421,7 @@ flowchart TB
 
 #### Solution
 
-* Challenge 4: [Simulate the On-Premises Environment](./walkthrough/onprem-ramp-up/onprem-ramp-up.md)
+* Challenge 4: [Simulate the On-Premises Environment](./walkthrough/onprem-ramp-up/onprem-ramp-up-simplified.md)
 
 ---
 
