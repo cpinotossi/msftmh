@@ -61,7 +61,7 @@ $trgConn="(description= (retry_count=20)(retry_delay=3)(address=(protocol=tcps)(
 ~~~
 
 ~~~powershell
-# Create a copy of the job template to avoid overwriting the original
+# Create a copy of the job template to avoid overwriting the original. Please verify if you are in the right home directory path of the downloaded github project (10_Oracle_on_Azure)!
 Copy-Item "resources\infra\k8s\adbping-job.yaml" "adbping-job.yaml"
 
 # Configure your ADB connection details

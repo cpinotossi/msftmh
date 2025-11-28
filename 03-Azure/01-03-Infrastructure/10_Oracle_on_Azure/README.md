@@ -172,6 +172,23 @@ OCI:    Tenancy --> Compartment (nested) --> Resource
 - Install Helm
 - Install git and clone this repo by following the instructions in [Clone Partial Repository](docs/clone-partial-repo.md)
 
+> [!TIP]
+> **Bash Users:** This microhack uses **PowerShell** syntax mostly. Bash users need to consider the key differences between powershell vs bash. Following some examples:
+> - Variable assignment: PowerShell `$var = "value"` → Bash `var="value"` (no spaces!)
+> - Command substitution: PowerShell `$(...)` or `(...)` → Bash `$(...)`
+> - Line continuation: PowerShell `` ` `` → Bash `\`
+> 
+>
+> Download Powershell for MacOS users for example:
+>
+> Install Homebrew if not already installed: \
+> /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
+> Install PowerShell: \
+> brew install --cask powershell \
+> Start PowerShell: \
+> pwsh
+
+
 ## 🎯 Challenges
  
 ### Challenge 0: Set Up Your User Account
@@ -188,7 +205,7 @@ You will receive a user and password for your account from your microhack coach.
 
 Start by browsing to the Azure Portal https://portal.azure.com.
 
-Open a private browser session or create your own browser profile to sign in with the credentials you received, and register multi-factor authentication.
+It is recommended to do the microhack in a **private browser session** or create your **own browser profile** to sign in with the credentials you received, and register multi-factor authentication. 
 
 As a first check, you have to verify if the two resource groups for the hackathon are created via the Azure Portal https://portal.azure.com.
 
@@ -244,11 +261,25 @@ Review the Oracle Database@Azure service offer, the required Azure resource prov
 
 ### Challenge 2: Create an Oracle Database@Azure (ODAA) Autonomous Database (ADB) Instance
 
-Walk through the delegated subnet prerequisites, select the assigned resource group, and deploy the Autonomous Database instance with the standard parameters supplied in the guide. Completion is confirmed when the database instance shows a healthy state in the portal.
+Walk through the delegated subnet prerequisites, select the assigned resource group, and deploy the Autonomous Database instance with the standard parameters supplied in the guide. Completion is confirmed when the database instance shows a healthy state in the portal. 
+
+
+
+In total we offer 4 types of Oracle database services in Azure. Information are available under the public link - [Region availabilitly of ODAA](https://apexadb.oracle.com/ords/r/dbexpert/multicloud-capabilities/multicloud-regions?session=412943632928469)
+
+
 
 #### Actions
 
 * Verify that a delegated subnet of the upcoming ADB deployment is available
+
+In this microhack, you deploy the ADB database via the **Azure portal**. For production environments, you can automate deployments using Infrastructure as Code (IaC):
+
+| Tool | Description | Resources |
+|------|-------------|-----------|
+| **Terraform/OpenTofu** | Use the AzAPI or AzureRM provider to provision Oracle Database@Azure resources | [Terraform examples for ADB](https://learn.microsoft.com/en-us/azure/oracle/oracle-db/oracle-database-examples-autonomous-database-services), [OCI Landing Zones](https://github.com/oci-landing-zones/terraform-oci-multicloud-azure) |
+| **Azure CLI** | Manage ODAA resources via `az oracle-database` commands | [Azure CLI for Oracle DB](https://learn.microsoft.com/en-us/cli/azure/oracle-database) |
+| **Bicep/ARM** | Deploy using Azure Resource Manager templates with the `Oracle.Database` resource provider | [Azure Verified Modules](https://aka.ms/avm) |
 
 > [!IMPORTANT]
 >
@@ -284,12 +315,18 @@ After you started the ADB deployment please clone the Github repository. Instruc
 
 ### Challenge 3: Update the Oracle ADB NSG and DNS
 
-Update the Network Security Group to allow traffic from the AKS environment and register the Oracle private endpoints in the AKS Private DNS zones. Validate connectivity from AKS after both security and DNS changes are applied.
+Although VNet peering connects the AKS and ODAA networks, two additional configurations are required before pods can reach the database:
+
+1. **NSG (Security):** The Oracle-managed NSG on the delegated subnet blocks all ingress by default. You must add an inbound rule that allows traffic from the AKS CIDR (`10.0.0.0/16`).
+
+2. **Private DNS (Name Resolution):** The ADB's private FQDN (e.g., `abc123.adb.eu-paris-1.oraclecloud.com`) is not automatically resolvable from Azure. You must create a Private DNS Zone matching the Oracle domain and add an A record pointing the hostname to the ADB's private IP.
+
+Once both are in place, pods can resolve the database hostname and their TCP connections are permitted through the NSG.
 
 #### Actions
 
-* Set the NSG of the CIDR on the OCI side, to allow Ingress from the AKS on the ADB
-* Extract the ODAA "Database private URL" (FQDN) and "Database private IP" and assign them to the "Azure Private DNS Zones" linked to the AKS VNet.
+* **NSG:** Add an inbound security rule in the OCI console to allow the AKS CIDR (`10.0.0.0/16`).
+* **DNS:** Copy the "Database private URL" and "Database private IP" from the Azure Portal, then create an A record in the corresponding Azure Private DNS Zone linked to the AKS VNet.
 
 #### DNS Configuration Diagram
 
