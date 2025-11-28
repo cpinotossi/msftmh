@@ -233,7 +233,7 @@ https://gghack.4.251.147.64.nip.io/sqlplus/vnc.html
 
 Alternatively, have a look at Your personal jupyter notebook:
 https://gghack.4.251.147.64.nip.io/jupyter/
-Just enter the password "Welcome1234" when asked and then open the CPAT analysis notebook.
+Just enter the password "Welcome1234#" when asked and then open the CPAT analysis notebook.
 
 Once the DB is ready, GoldenGate Sync should be set up too. Check it out right here:
 https://gghack.4.251.147.64.nip.io

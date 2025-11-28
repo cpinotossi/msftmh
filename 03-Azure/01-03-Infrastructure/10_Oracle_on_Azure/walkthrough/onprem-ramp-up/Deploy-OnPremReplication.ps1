@@ -426,7 +426,7 @@ function Show-DeploymentSummary {
     
     Write-Host "🔑 Credentials:" -ForegroundColor Cyan
     Write-Host "   GoldenGate Admin:  ggadmin / <your-password>" -ForegroundColor White
-    Write-Host "   Jupyter Password:  Welcome1234" -ForegroundColor White
+    Write-Host "   Jupyter Password:  Welcome1234#" -ForegroundColor White
     Write-Host ""
     
     Write-Host "📋 Useful Commands:" -ForegroundColor Cyan

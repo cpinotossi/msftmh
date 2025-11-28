@@ -35,8 +35,17 @@ Before starting, make sure you have:
 First, retrieve your ODAA ADB connection string from the Azure Portal:
 
 1. Go to your **ODAA ADB resource** in Azure Portal
-2. Navigate to **Connections**
-3. Copy the **High** profile connection string
+2. Navigate to settings in the navigation tree in your Azure portal
+3. Under settings you will find the menu point **Connections**
+4. Copy the **High** profile connection string
+
+> [!IMPORTANT]
+> **Use the TLS connection string, NOT mTLS!**
+> 
+> You will see a list with: **TLS** and **mTLS (mutual TLS)**. Make sure you copy the connection string from the **TLS** tab.
+> 
+> - ✅ **TLS:** Server-side certificate only (simpler, what we use here)
+> - ❌ **mTLS:** Requires client wallet/certificates (more complex setup)
 
 It should look like this:
 ```
@@ -126,7 +135,7 @@ The deployment creates several web interfaces (replace `<EXTERNAL-IP>` with your
 |-----------|-----|-------------|
 | **GoldenGate UI** | `https://gghack.<EXTERNAL-IP>.nip.io` | ggadmin / your-password |
 | **SQLPlus Web** | `https://gghack.<EXTERNAL-IP>.nip.io/sqlplus/vnc.html` | - |
-| **Jupyter Notebook** | `https://gghack.<EXTERNAL-IP>.nip.io/jupyter/` | Welcome1234 |
+| **Jupyter Notebook** | `https://gghack.<EXTERNAL-IP>.nip.io/jupyter/` | Welcome1234# |
 | **GG Big Data** | `https://daagghack.<EXTERNAL-IP>.nip.io` | ggadmin / your-password |
 
 To find your external IP:

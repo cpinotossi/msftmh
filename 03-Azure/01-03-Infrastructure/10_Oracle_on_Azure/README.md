@@ -212,6 +212,13 @@ You have two options to run this microhack:
 
 The goal is to ensure your Azure account is ready for administrative work in the remaining challenges.
 
+> [!WARNING]
+> **Before you begin — Ask your coach about a password or recommendation!**
+> 
+> The password you set for the Oracle Autonomous Database will be used in multiple challenges (GoldenGate, Data Pump, scripts).
+> 
+> Using an incompatible password may cause deployment failures in later challenges.
+
 > [!IMPORTANT] Before using the AZ command line in your preferred GUI or CLI, please make sure to log out of any previous session by running the command: 
 >
 >```powershell 
@@ -312,7 +319,6 @@ In this microhack, you deploy the ADB database via the **Azure portal**. For pro
 > 7. Backup retention period in days: **1 day**
 > 8. Administrator password: (do not use '!' inside your password)
 > 9. License type: **License included**
-> 10. Oracle database edition: **Enterprise Edition**
 
 After you started the ADB deployment please clone the Github repository. Instructions are listed in the challenge 2 at the end of the ADB deployment section - see **IMPORTANT: While you are waiting for the ADB creation**
 
