@@ -166,6 +166,13 @@ OCI:    Tenancy --> Compartment (nested) --> Resource
 
 ## 📋 Prerequisites
 
+You have two options to run this microhack:
+
+1. **Local Setup:** Install the tools listed below on your laptop
+2. **Zero-Install Option:** Use [Azure Cloud Shell](#azure-cloud-shell-alternative) (see tip below) — all tools are pre-installed
+
+### Local Tools (if not using Cloud Shell)
+
 - PowerShell Terminal
 - 🔧 Install Azure CLI
 - ⚓ Install kubectl
@@ -179,14 +186,24 @@ OCI:    Tenancy --> Compartment (nested) --> Resource
 > - Line continuation: PowerShell `` ` `` → Bash `\`
 > 
 >
-> Download Powershell for MacOS users for example:
+
+
+
+
+> [!TIP]
+> <a id="azure-cloud-shell-alternative"></a>
+> **Azure Cloud Shell Alternative:** You can run this entire microhack using [Azure Cloud Shell](https://shell.azure.com) without installing anything locally. Cloud Shell provides:
+> - **Pre-installed tools:** Azure CLI, kubectl, Helm, git, and PowerShell are already available
+> - **Persistent storage:** Your files are saved in an Azure File Share across sessions
+> - **Browser-based:** No local setup required—just sign in to the Azure Portal and click the Cloud Shell icon (>_)
 >
-> Install Homebrew if not already installed: \
-> /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
-> Install PowerShell: \
-> brew install --cask powershell \
-> Start PowerShell: \
-> pwsh
+> **To use Cloud Shell:**
+> 1. Open https://shell.azure.com or click the **Cloud Shell** icon in the Azure Portal header
+> 2. Select **PowerShell** as your shell environment
+> 3. Clone this repo: `git clone https://github.com/cpinotossi/msftmh.git`
+> 4. Navigate to the microhack folder: `cd msftmh/03-Azure/01-03-Infrastructure/10_Oracle_on_Azure`
+>
+> All commands in this microhack will work in Cloud Shell without modification.
 
 
 ## 🎯 Challenges
