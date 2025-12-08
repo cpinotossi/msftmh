@@ -80,7 +80,7 @@ param(
     
     [Parameter(Mandatory = $false)]
     [ValidateSet("adbping", "connping", "both")]
-    [string]$TestType = "adbping",
+    [string]$TestType = "both",
     
     [Parameter(Mandatory = $false)]
     [int]$TestDuration = 90,
