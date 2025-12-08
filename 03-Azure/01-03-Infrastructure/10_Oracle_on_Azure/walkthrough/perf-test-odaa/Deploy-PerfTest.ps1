@@ -97,8 +97,6 @@ param(
 # ============================================================================
 $ErrorActionPreference = "Stop"
 $Namespace = "adb-perf-test"
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RepoRoot = (Resolve-Path "$ScriptDir\..\..").Path
 
 # ============================================================================
 # Helper Functions
@@ -221,22 +219,42 @@ function Deploy-ADBPingTest {
     
     Write-Step "Deploying ADBPing Performance Test" "🚀"
     
-    $templatePath = "$RepoRoot\resources\infra\k8s\adbping-job.yaml"
-    
-    if (-not (Test-Path $templatePath)) {
-        throw "Template file not found: $templatePath"
-    }
+    # Generate job YAML inline (no external template dependency)
+    $jobYaml = @"
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: adbping-performance-test
+  namespace: $Namespace
+spec:
+  template:
+    spec:
+      containers:
+      - name: adbping-tester
+        image: odaamh.azurecr.io/adb-nettest:v2.1
+        command: ["/bin/bash"]
+        args:
+        - -c
+        - |
+          echo "Oracle ADB Performance Test"
+          echo "=============================="
+          adbping -u "admin" -p "$Password" -o -l "$TNSString" -c java -t $ThreadCount -d $Duration
+          echo ""
+          echo "Performance test completed!"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      restartPolicy: Never
+  backoffLimit: 3
+"@
     
     # Create a temporary job file
     $tempJobFile = Join-Path $env:TEMP "adbping-job-temp.yaml"
-    
-    # Read and modify the template
-    $content = Get-Content $templatePath -Raw
-    $content = $content -replace 'YOUR_PASSWORD_HERE', $Password
-    $content = $content -replace 'YOUR_TNS_CONNECTION_STRING_HERE', $TNSString
-    
-    # Write to temp file
-    $content | Set-Content $tempJobFile -Encoding UTF8
+    $jobYaml | Set-Content $tempJobFile -Encoding UTF8
     
     Write-Info "Deploying adbping job..."
     kubectl apply -f $tempJobFile -n $Namespace
@@ -256,22 +274,42 @@ function Deploy-ConnPingTest {
     
     Write-Step "Deploying ConnPing Performance Test" "🚀"
     
-    $templatePath = "$RepoRoot\resources\infra\k8s\connping-job.yaml"
-    
-    if (-not (Test-Path $templatePath)) {
-        throw "Template file not found: $templatePath"
-    }
+    # Generate job YAML inline (no external template dependency)
+    $jobYaml = @"
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: connping-performance-test
+  namespace: $Namespace
+spec:
+  template:
+    spec:
+      containers:
+      - name: connping-tester
+        image: odaamh.azurecr.io/connping:v1.2
+        command: ["/bin/bash"]
+        args:
+        - -c
+        - |
+          echo "Oracle ADB Connping Performance Test"
+          echo "=============================="
+          connping -ss -l "admin/$Password@$TNSString" --period=$Duration
+          echo ""
+          echo "Connping test completed!"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      restartPolicy: Never
+  backoffLimit: 3
+"@
     
     # Create a temporary job file
     $tempJobFile = Join-Path $env:TEMP "connping-job-temp.yaml"
-    
-    # Read and modify the template
-    $content = Get-Content $templatePath -Raw
-    $content = $content -replace 'YOUR_PASSWORD_HERE', $Password
-    $content = $content -replace 'YOUR_TNS_CONNECTION_STRING_HERE', $TNSString
-    
-    # Write to temp file
-    $content | Set-Content $tempJobFile -Encoding UTF8
+    $jobYaml | Set-Content $tempJobFile -Encoding UTF8
     
     Write-Info "Deploying connping job..."
     kubectl apply -f $tempJobFile -n $Namespace
