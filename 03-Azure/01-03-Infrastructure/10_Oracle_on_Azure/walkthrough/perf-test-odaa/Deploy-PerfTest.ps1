@@ -381,6 +381,7 @@ function Parse-ADBPingResults {
         Pass = "N/A"
         Fail = "N/A"
         AvgLatency = "N/A"
+        MedianLatency = "N/A"
         P95Latency = "N/A"
         P99Latency = "N/A"
         MinLatency = "N/A"
@@ -394,12 +395,13 @@ function Parse-ADBPingResults {
     }
     
     # Parse "SQL Execution Time(ms) : Min:0.543 Max:89.571 Avg:0.747 Median:0.653 Perc90:0.762 Perc95:0.778 Perc99:0.891"
-    if ($Logs -match "SQL Execution Time\(ms\)\s*:\s*Min:([\d.]+)\s+Max:([\d.]+)\s+Avg:([\d.]+).*Perc95:([\d.]+)\s+Perc99:([\d.]+)") {
+    if ($Logs -match "SQL Execution Time\(ms\)\s*:\s*Min:([\d.]+)\s+Max:([\d.]+)\s+Avg:([\d.]+)\s+Median:([\d.]+).*Perc95:([\d.]+)\s+Perc99:([\d.]+)") {
         $results.MinLatency = $Matches[1]
         $results.MaxLatency = $Matches[2]
         $results.AvgLatency = $Matches[3]
-        $results.P95Latency = $Matches[4]
-        $results.P99Latency = $Matches[5]
+        $results.MedianLatency = $Matches[4]
+        $results.P95Latency = $Matches[5]
+        $results.P99Latency = $Matches[6]
     }
     
     return $results
@@ -439,130 +441,36 @@ function Show-FormattedSummary {
         [string]$TestType
     )
     
-    Write-Host "`n"
-    Write-Host "╔══════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║                    PERFORMANCE TEST SUMMARY                      ║" -ForegroundColor Cyan
-    Write-Host "╠══════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+    $line = "─" * 68
+    
+    Write-Host ""
+    Write-Host $line -ForegroundColor Cyan
+    Write-Host "                    PERFORMANCE TEST SUMMARY" -ForegroundColor Cyan
+    Write-Host $line -ForegroundColor Cyan
     
     if ($ADBPingResults) {
-        Write-Host "║  📊 ADBPING RESULTS (Java client, multi-threaded)               ║" -ForegroundColor Cyan
-        Write-Host "╠══════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
-        Write-Host "║                                                                  ║" -ForegroundColor Cyan
-        
-        # Format metrics with color coding
-        $avgColor = if ([double]$ADBPingResults.AvgLatency -lt 1) { "Green" } elseif ([double]$ADBPingResults.AvgLatency -lt 2) { "Yellow" } else { "Red" }
-        $p99Color = if ([double]$ADBPingResults.P99Latency -lt 2) { "Green" } elseif ([double]$ADBPingResults.P99Latency -lt 5) { "Yellow" } else { "Red" }
-        
-        Write-Host "║  " -NoNewline -ForegroundColor Cyan
-        Write-Host "Metric              " -NoNewline -ForegroundColor White
-        Write-Host "Value       " -NoNewline -ForegroundColor White
-        Write-Host "Status" -NoNewline -ForegroundColor White
-        Write-Host "                             ║" -ForegroundColor Cyan
-        
-        Write-Host "║  " -NoNewline -ForegroundColor Cyan
-        Write-Host "────────────────────────────────────────────────────────────" -NoNewline -ForegroundColor DarkGray
-        Write-Host "  ║" -ForegroundColor Cyan
-        
-        # Pass/Fail
-        Write-Host "║  " -NoNewline -ForegroundColor Cyan
-        Write-Host ("Requests            {0,-12}" -f "$($ADBPingResults.Pass) pass, $($ADBPingResults.Fail) fail") -NoNewline -ForegroundColor White
-        Write-Host "                       ║" -ForegroundColor Cyan
-        
-        # Avg Latency
-        Write-Host "║  " -NoNewline -ForegroundColor Cyan
-        Write-Host "Avg SQL Latency     " -NoNewline -ForegroundColor White
-        Write-Host ("{0,-12}" -f "$($ADBPingResults.AvgLatency) ms") -NoNewline -ForegroundColor $avgColor
-        $avgStatus = if ([double]$ADBPingResults.AvgLatency -lt 1) { "✅ Excellent" } elseif ([double]$ADBPingResults.AvgLatency -lt 2) { "⚠️  Good" } else { "❌ High" }
-        Write-Host ("{0,-25}" -f $avgStatus) -NoNewline -ForegroundColor $avgColor
-        Write-Host "  ║" -ForegroundColor Cyan
-        
-        # P95 Latency
-        Write-Host "║  " -NoNewline -ForegroundColor Cyan
-        Write-Host "P95 Latency         " -NoNewline -ForegroundColor White
-        Write-Host ("{0,-12}" -f "$($ADBPingResults.P95Latency) ms") -NoNewline -ForegroundColor White
-        Write-Host "                         ║" -ForegroundColor Cyan
-        
-        # P99 Latency
-        Write-Host "║  " -NoNewline -ForegroundColor Cyan
-        Write-Host "P99 Latency         " -NoNewline -ForegroundColor White
-        Write-Host ("{0,-12}" -f "$($ADBPingResults.P99Latency) ms") -NoNewline -ForegroundColor $p99Color
-        $p99Status = if ([double]$ADBPingResults.P99Latency -lt 2) { "✅ Excellent" } elseif ([double]$ADBPingResults.P99Latency -lt 5) { "⚠️  Good" } else { "❌ High" }
-        Write-Host ("{0,-25}" -f $p99Status) -NoNewline -ForegroundColor $p99Color
-        Write-Host "  ║" -ForegroundColor Cyan
-        
-        # Min/Max
-        Write-Host "║  " -NoNewline -ForegroundColor Cyan
-        Write-Host ("Min/Max Latency     {0,-12}" -f "$($ADBPingResults.MinLatency) / $($ADBPingResults.MaxLatency) ms") -NoNewline -ForegroundColor White
-        Write-Host "                    ║" -ForegroundColor Cyan
-        
-        Write-Host "║                                                                  ║" -ForegroundColor Cyan
+        Write-Host "ADBPING RESULTS" -ForegroundColor White
+        Write-Host $line -ForegroundColor Cyan
+        Write-Host "  Requests:        $($ADBPingResults.Pass) pass / $($ADBPingResults.Fail) fail"
+        Write-Host "  Avg Latency:     $($ADBPingResults.AvgLatency) ms"
+        Write-Host "  Median Latency:  $($ADBPingResults.MedianLatency) ms"
+        Write-Host "  P95 Latency:     $($ADBPingResults.P95Latency) ms"
+        Write-Host "  P99 Latency:     $($ADBPingResults.P99Latency) ms"
+        Write-Host "  Min/Max:         $($ADBPingResults.MinLatency) / $($ADBPingResults.MaxLatency) ms"
+        Write-Host $line -ForegroundColor Cyan
     }
     
     if ($ConnPingResults) {
-        Write-Host "╠══════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
-        Write-Host "║  📊 CONNPING/OCIPING RESULTS (rwloadsim, connection pooling)     ║" -ForegroundColor Cyan
-        Write-Host "╠══════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
-        Write-Host "║                                                                  ║" -ForegroundColor Cyan
-        
-        # OCI Ping color coding
-        $ociColor = "White"
-        $ociStatus = ""
-        if ($ConnPingResults.OciPingMean -ne "N/A") {
-            $ociColor = if ([double]$ConnPingResults.OciPingMean -lt 1) { "Green" } elseif ([double]$ConnPingResults.OciPingMean -lt 2) { "Yellow" } else { "Red" }
-            $ociStatus = if ([double]$ConnPingResults.OciPingMean -lt 1) { "✅ Excellent" } elseif ([double]$ConnPingResults.OciPingMean -lt 2) { "⚠️  Good" } else { "❌ High" }
-        }
-        
-        # Connect time color coding
-        $connColor = "White"
-        $connStatus = ""
-        if ($ConnPingResults.ConnectMean -ne "N/A") {
-            $connColor = if ([double]$ConnPingResults.ConnectMean -lt 120) { "Green" } elseif ([double]$ConnPingResults.ConnectMean -lt 200) { "Yellow" } else { "Red" }
-            $connStatus = if ([double]$ConnPingResults.ConnectMean -lt 120) { "✅ Excellent" } elseif ([double]$ConnPingResults.ConnectMean -lt 200) { "⚠️  Good" } else { "❌ High" }
-        }
-        
-        Write-Host "║  " -NoNewline -ForegroundColor Cyan
-        Write-Host "OCI Ping (RTT)      " -NoNewline -ForegroundColor White
-        Write-Host ("{0,-12}" -f "$($ConnPingResults.OciPingMean) ms") -NoNewline -ForegroundColor $ociColor
-        Write-Host ("{0,-25}" -f $ociStatus) -NoNewline -ForegroundColor $ociColor
-        Write-Host "  ║" -ForegroundColor Cyan
-        
-        Write-Host "║  " -NoNewline -ForegroundColor Cyan
-        Write-Host "Dual Ping (SQL)     " -NoNewline -ForegroundColor White
-        Write-Host ("{0,-12}" -f "$($ConnPingResults.DualPingMean) ms") -NoNewline -ForegroundColor White
-        Write-Host "                         ║" -ForegroundColor Cyan
-        
-        Write-Host "║  " -NoNewline -ForegroundColor Cyan
-        Write-Host "Connect Time        " -NoNewline -ForegroundColor White
-        Write-Host ("{0,-12}" -f "$($ConnPingResults.ConnectMean) ms") -NoNewline -ForegroundColor $connColor
-        Write-Host ("{0,-25}" -f $connStatus) -NoNewline -ForegroundColor $connColor
-        Write-Host "  ║" -ForegroundColor Cyan
-        
-        Write-Host "║                                                                  ║" -ForegroundColor Cyan
+        Write-Host "CONNPING RESULTS" -ForegroundColor White
+        Write-Host $line -ForegroundColor Cyan
+        Write-Host "  OCI Ping:        $($ConnPingResults.OciPingMean) ms"
+        Write-Host "  Dual Ping:       $($ConnPingResults.DualPingMean) ms"
+        Write-Host "  Connect Time:    $($ConnPingResults.ConnectMean) ms"
+        Write-Host $line -ForegroundColor Cyan
     }
     
-    Write-Host "╠══════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
-    Write-Host "║  📈 BENCHMARKS                                                   ║" -ForegroundColor Cyan
-    Write-Host "║  ────────────────────────────────────────────────────────────    ║" -ForegroundColor Cyan
-    Write-Host "║  " -NoNewline -ForegroundColor Cyan
-    Write-Host "Metric          Excellent    Good        Needs Review" -NoNewline -ForegroundColor White
-    Write-Host "             ║" -ForegroundColor Cyan
-    Write-Host "║  " -NoNewline -ForegroundColor Cyan
-    Write-Host "OCI/SQL Ping    " -NoNewline -ForegroundColor White
-    Write-Host "< 1ms" -NoNewline -ForegroundColor Green
-    Write-Host "        " -NoNewline
-    Write-Host "1-2ms" -NoNewline -ForegroundColor Yellow
-    Write-Host "       " -NoNewline
-    Write-Host "> 5ms" -NoNewline -ForegroundColor Red
-    Write-Host "                      ║" -ForegroundColor Cyan
-    Write-Host "║  " -NoNewline -ForegroundColor Cyan
-    Write-Host "Connect Time    " -NoNewline -ForegroundColor White
-    Write-Host "< 120ms" -NoNewline -ForegroundColor Green
-    Write-Host "      " -NoNewline
-    Write-Host "120-200ms" -NoNewline -ForegroundColor Yellow
-    Write-Host "   " -NoNewline
-    Write-Host "> 300ms" -NoNewline -ForegroundColor Red
-    Write-Host "                  ║" -ForegroundColor Cyan
-    Write-Host "╚══════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "BENCHMARKS: OCI/SQL < 2ms = Good | Connect < 150ms = Good" -ForegroundColor DarkGray
+    Write-Host $line -ForegroundColor Cyan
 }
 
 function Remove-TestJobs {
