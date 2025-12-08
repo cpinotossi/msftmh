@@ -252,8 +252,9 @@ spec:
   backoffLimit: 3
 "@
     
-    # Create a temporary job file
-    $tempJobFile = Join-Path $env:TEMP "adbping-job-temp.yaml"
+    # Create a temporary job file (cross-platform temp path)
+    $tempDir = if ($env:TEMP) { $env:TEMP } elseif ($env:TMPDIR) { $env:TMPDIR } else { "/tmp" }
+    $tempJobFile = Join-Path $tempDir "adbping-job-temp.yaml"
     $jobYaml | Set-Content $tempJobFile -Encoding UTF8
     
     Write-Info "Deploying adbping job..."
@@ -307,8 +308,9 @@ spec:
   backoffLimit: 3
 "@
     
-    # Create a temporary job file
-    $tempJobFile = Join-Path $env:TEMP "connping-job-temp.yaml"
+    # Create a temporary job file (cross-platform temp path)
+    $tempDir = if ($env:TEMP) { $env:TEMP } elseif ($env:TMPDIR) { $env:TMPDIR } else { "/tmp" }
+    $tempJobFile = Join-Path $tempDir "connping-job-temp.yaml"
     $jobYaml | Set-Content $tempJobFile -Encoding UTF8
     
     Write-Info "Deploying connping job..."
