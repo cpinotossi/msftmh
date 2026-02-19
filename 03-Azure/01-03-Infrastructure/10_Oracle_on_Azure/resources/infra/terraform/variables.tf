@@ -140,3 +140,34 @@ variable "tags" {
     ManagedBy = "Terraform"
   }
 }
+
+# ===============================================================================
+# Entra ID (Azure AD) Login Configuration
+# ===============================================================================
+
+variable "enable_entra_id_login" {
+  description = "Enable Entra ID (Azure AD) login for VMs"
+  type        = bool
+  default     = true
+}
+
+variable "entra_id_admin_login" {
+  description = "Grant admin (sudo) access to Entra ID users"
+  type        = bool
+  default     = true
+}
+
+# User Object IDs for Entra ID login (one per user)
+# These are the Entra ID user object IDs who will have access to each VM
+
+variable "user_object_ids" {
+  description = "Map of user index to Entra ID user object ID"
+  type        = map(string)
+  default     = {}
+  # Example:
+  # {
+  #   "00" = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+  #   "01" = "ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj"
+  #   ...
+  # }
+}

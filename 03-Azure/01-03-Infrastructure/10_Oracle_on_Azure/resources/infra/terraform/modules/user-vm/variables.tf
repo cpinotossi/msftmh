@@ -86,3 +86,25 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# ===============================================================================
+# Entra ID (Azure AD) Login Configuration
+# ===============================================================================
+
+variable "enable_entra_id_login" {
+  description = "Enable Entra ID (Azure AD) login for the VM"
+  type        = bool
+  default     = true
+}
+
+variable "entra_id_user_object_id" {
+  description = "Object ID of the Entra ID user who should have login access"
+  type        = string
+  default     = null
+}
+
+variable "entra_id_admin_login" {
+  description = "Grant admin (sudo) access to the Entra ID user"
+  type        = bool
+  default     = true
+}

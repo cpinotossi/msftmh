@@ -119,6 +119,11 @@ resource "azurerm_linux_virtual_machine" "vm" {
     azurerm_network_interface.vm.id
   ]
 
+  # System-assigned managed identity required for Entra ID login
+  identity {
+    type = "SystemAssigned"
+  }
+
   admin_ssh_key {
     username   = var.admin_username
     public_key = var.admin_ssh_public_key
@@ -149,6 +154,43 @@ resource "azurerm_linux_virtual_machine" "vm" {
       tags["CreatedDate"]
     ]
   }
+}
+
+# ===============================================================================
+# Entra ID (Azure AD) Login Extension
+# ===============================================================================
+
+resource "azurerm_virtual_machine_extension" "aad_login" {
+  count                      = var.enable_entra_id_login ? 1 : 0
+  name                       = "AADSSHLoginForLinux"
+  virtual_machine_id         = azurerm_linux_virtual_machine.vm.id
+  publisher                  = "Microsoft.Azure.ActiveDirectory"
+  type                       = "AADSSHLoginForLinux"
+  type_handler_version       = "1.0"
+  auto_upgrade_minor_version = true
+
+  tags = var.tags
+}
+
+# ===============================================================================
+# RBAC: Entra ID User Login Permission
+# ===============================================================================
+
+resource "azurerm_role_assignment" "vm_user_login" {
+  count                = var.enable_entra_id_login && var.entra_id_user_object_id != null ? 1 : 0
+  scope                = azurerm_linux_virtual_machine.vm.id
+  role_definition_name = "Virtual Machine User Login"
+  principal_id         = var.entra_id_user_object_id
+  description          = "Allows Entra ID user to login to VM ${azurerm_linux_virtual_machine.vm.name}"
+}
+
+# Optional: Admin login (sudo access)
+resource "azurerm_role_assignment" "vm_admin_login" {
+  count                = var.enable_entra_id_login && var.entra_id_user_object_id != null && var.entra_id_admin_login ? 1 : 0
+  scope                = azurerm_linux_virtual_machine.vm.id
+  role_definition_name = "Virtual Machine Administrator Login"
+  principal_id         = var.entra_id_user_object_id
+  description          = "Allows Entra ID user admin (sudo) access to VM ${azurerm_linux_virtual_machine.vm.name}"
 }
 
 # ===============================================================================

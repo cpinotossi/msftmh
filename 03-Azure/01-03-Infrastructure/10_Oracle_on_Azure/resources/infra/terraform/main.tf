@@ -55,6 +55,12 @@ module "user_vm_00" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "00", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -113,6 +119,12 @@ module "user_vm_01" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "01", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -171,6 +183,12 @@ module "user_vm_02" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "02", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -229,6 +247,12 @@ module "user_vm_03" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "03", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -287,6 +311,12 @@ module "user_vm_04" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "04", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -345,6 +375,12 @@ module "user_vm_05" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "05", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -403,6 +439,12 @@ module "user_vm_06" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "06", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -461,6 +503,12 @@ module "user_vm_07" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "07", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -519,6 +567,12 @@ module "user_vm_08" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "08", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -577,6 +631,12 @@ module "user_vm_09" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "09", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -635,6 +695,12 @@ module "user_vm_10" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "10", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -693,6 +759,12 @@ module "user_vm_11" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "11", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -751,6 +823,12 @@ module "user_vm_12" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "12", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -809,6 +887,12 @@ module "user_vm_13" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "13", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -867,6 +951,12 @@ module "user_vm_14" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "14", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -925,6 +1015,12 @@ module "user_vm_15" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "15", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -983,6 +1079,12 @@ module "user_vm_16" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "16", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -1041,6 +1143,12 @@ module "user_vm_17" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "17", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -1099,6 +1207,12 @@ module "user_vm_18" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "18", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -1157,6 +1271,12 @@ module "user_vm_19" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "19", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -1215,6 +1335,12 @@ module "user_vm_20" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "20", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -1273,6 +1399,12 @@ module "user_vm_21" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "21", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -1331,6 +1463,12 @@ module "user_vm_22" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "22", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -1389,6 +1527,12 @@ module "user_vm_23" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "23", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
@@ -1447,6 +1591,12 @@ module "user_vm_24" {
   dns_zone_id             = module.shared.dns_zone_id
   dns_zone_name           = module.shared.dns_zone_name
   dns_zone_resource_group = module.shared.resource_group_name
+  
+  # Entra ID Login
+  enable_entra_id_login   = var.enable_entra_id_login
+  entra_id_user_object_id = lookup(var.user_object_ids, "24", null)
+  entra_id_admin_login    = var.entra_id_admin_login
+  
   tags                    = var.tags
 }
 
