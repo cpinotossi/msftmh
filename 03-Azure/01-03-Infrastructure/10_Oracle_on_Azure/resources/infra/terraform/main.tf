@@ -1,874 +1,1482 @@
 # ===============================================================================
-# Terraform Configuration for Oracle on Azure Infrastructure
+# Oracle on Azure Workshop - Simplified Infrastructure
 # ===============================================================================
-# This configuration provisions multiple isolated AKS environments across up to
-# five subscriptions together with the shared Oracle Database@Azure networking.
-# Kubernetes users, credentials, and role assignments are created per workspace
-# while networking is shared via a single delegated subnet.
-# ===============================================================================
-
-# ===============================================================================
-# Local Values
-# ===============================================================================
-
-locals {
-  default_location          = var.location
-  default_prefix            = "user"
-  default_aks_vm_size       = var.aks_vm_size
-  default_aks_os_disk_type  = var.aks_os_disk_type
-  default_fqdn_odaa_fra     = var.fqdn_odaa_fra
-  default_fqdn_odaa_app_fra = var.fqdn_odaa_app_fra
-  default_fqdn_odaa_par     = var.fqdn_odaa_par
-  default_fqdn_odaa_app_par = var.fqdn_odaa_app_par
-
-  default_aks_cidr_base  = var.aks_cidr_base
-  default_service_cidr   = var.aks_service_cidr
-  default_odaa_cidr_base = var.odaa_cidr_base
-
-  common_tags = {
-    Project   = local.microhack_event_name
-    ManagedBy = "Terraform"
-  }
-
-  subscription_targets      = var.subscription_targets
-  subscription_target_count = length(local.subscription_targets)
-  user_indices              = range(var.user_count)
-
-  deployments = {
-    for idx in local.user_indices :
-    tostring(idx) => {
-      index             = idx                                                                               # originates from the user count.
-      provider_index    = idx % local.subscription_target_count                                             # round robin assignment to subscription slots
-      subscription_id   = local.subscription_targets[idx % local.subscription_target_count].subscription_id # round robin assignment to subscription id
-      tenant_id         = var.tenant_id                                                                     # single tenant ID for all deployments
-      postfix           = format("%02d", idx)
-      prefix            = local.default_prefix
-      location          = local.default_location
-      aks_cidr          = "10.0.0.0"                                       # Same CIDR for all users (isolated by VNet, no cross-user peering)
-      aks_service_cidr  = "172.${16 + floor(idx / 256)}.${idx % 256}.0/24" # Unique service CIDR in 172.16.0.0/12 to avoid 10.0.0.0/8 and 192.168.0.0/16 overlaps
-      aks_vm_size       = local.default_aks_vm_size
-      aks_os_disk_type  = local.default_aks_os_disk_type
-      odaa_cidr         = local.default_odaa_cidr_base
-      fqdn_odaa_fra     = local.default_fqdn_odaa_fra
-      fqdn_odaa_app_fra = local.default_fqdn_odaa_app_fra
-      fqdn_odaa_par     = local.default_fqdn_odaa_par
-      fqdn_odaa_app_par = local.default_fqdn_odaa_app_par
-      name              = format("%s%02d", local.default_prefix, idx)
-      user_identifier   = lower(format("%s%02d", local.default_prefix, idx))
-    }
-  }
-
-  aks_deployments_by_slot = {
-    for idx in range(5) :
-    tostring(idx) => {
-      for key, deployment in local.deployments :
-      key => deployment if deployment.provider_index == idx
-    }
-  }
-
-  deployment_names = [for deployment in values(local.deployments) : deployment.name]
-
-  shared_deployment_group = {
-    name        = "mh-odaa-user-grp"
-    description = "Security group with rights to deploy applications to the Oracle AKS cluster"
-  }
-
-  deployment_users = {
-    for key, deployment in local.deployments :
-    key => {
-      identifier = deployment.user_identifier
-    }
-  }
-}
-
-# ===============================================================================
-# Identity Configuration
-# ===============================================================================
-# User identities are managed separately in the identity/ folder to avoid
-# Azure AD eventual consistency issues. This configuration reads from the
-# identity/user_credentials.json file which contains user object IDs, UPNs,
-# group information, passwords, and event metadata.
+# This configuration deploys workshop infrastructure for 25 users:
+# - 1x Shared resources (Compute Gallery, DNS Zone)
+# - 25x User VMs with VNets
+# - 25x User ODAA VNets with delegated subnets
+# - 25x VNet Peerings (VM <-> ODAA)
 #
-# Workflow:
-#   1. Run 'terraform apply' in identity/ folder to create/manage users
-#   2. Run 'terraform apply' here to deploy infrastructure
+# Design Principles:
+# - No for_each or count loops - explicit module definitions
+# - Maximum readability and debuggability
+# - Each user's resources are independently defined
 # ===============================================================================
 
-locals {
-  identity_file_path = var.identity_file_path != null ? var.identity_file_path : abspath("${path.root}/identity/user_credentials.json")
-}
-
-data "local_file" "identity" {
-  filename = local.identity_file_path
-}
-
-locals {
-  # Parse the identity file
-  identity_data = jsondecode(data.local_file.identity.content)
-
-  # Event name from identity file (single source of truth)
-  # Falls back to variable if not present in file (backwards compatibility)
-  microhack_event_name = try(local.identity_data.microhack_event_name, var.microhack_event_name)
-
-  # User object IDs (map from index key to object ID)
-  deployment_user_object_ids = {
-    for idx in local.user_indices :
-    tostring(idx) => local.identity_data.users[format("user%02d", idx)].object_id
-  }
-
-  # User principal names
-  deployment_user_principal_names = {
-    for idx in local.user_indices :
-    tostring(idx) => local.identity_data.users[format("user%02d", idx)].user_principal_name
-  }
-
-  # Group information
-  identity_group_object_id    = local.identity_data.group.object_id
-  identity_group_display_name = local.identity_data.group.display_name
-}
-
 # ===============================================================================
-# Oracle Cloud Enterprise App Access
+# SHARED RESOURCES
 # ===============================================================================
 
-data "azuread_service_principal" "oracle_cloud" {
-  count     = var.oracle_cloud_service_principal_object_id == null ? 0 : 1
-  object_id = var.oracle_cloud_service_principal_object_id
-}
-
-data "azurerm_subscription" "odaa" {
-  subscription_id = var.odaa_subscription_id
-}
-
-locals {
-  oracle_cloud_service_principal = var.oracle_cloud_service_principal_object_id == null ? null : try(data.azuread_service_principal.oracle_cloud[0], null)
-
-  oracle_cloud_app_roles = local.oracle_cloud_service_principal == null ? [] : [
-    for role in local.oracle_cloud_service_principal.app_roles : role
-    if role.enabled
-  ]
-
-  oracle_cloud_app_role_id_from_value = (
-    local.oracle_cloud_service_principal == null ? null : (
-      var.oracle_cloud_service_principal_app_role_value == null ? null : (
-        contains(keys(local.oracle_cloud_service_principal.app_role_ids), var.oracle_cloud_service_principal_app_role_value) ?
-        local.oracle_cloud_service_principal.app_role_ids[var.oracle_cloud_service_principal_app_role_value] :
-        try(([
-          for role in local.oracle_cloud_app_roles : role.id
-          if role.value == var.oracle_cloud_service_principal_app_role_value
-        ])[0], null)
-      )
-    )
-  )
-
-  oracle_cloud_app_role_id_by_display_name = local.oracle_cloud_service_principal == null ? null : try(([
-    for role in local.oracle_cloud_app_roles : role.id
-    if lower(role.display_name) == "user"
-  ])[0], null)
-
-  oracle_cloud_app_role_default_id = local.oracle_cloud_service_principal == null ? null : try(local.oracle_cloud_app_roles[0].id, null)
-
-  oracle_cloud_app_role_id = local.oracle_cloud_service_principal == null ? null : (
-    local.oracle_cloud_app_role_id_from_value != null ?
-    local.oracle_cloud_app_role_id_from_value : (
-      local.oracle_cloud_app_role_id_by_display_name != null ?
-      local.oracle_cloud_app_role_id_by_display_name :
-      local.oracle_cloud_app_role_default_id
-    )
-  )
-}
-
-# Commented out - App role assignment already exists in Azure AD (created manually)
-# resource "azuread_app_role_assignment" "oracle_cloud_group" {
-#   count = local.oracle_cloud_app_role_id == null ? 0 : 1
-#
-#   resource_object_id  = local.oracle_cloud_service_principal.object_id
-#   principal_object_id = local.identity_group_object_id
-#   app_role_id         = local.oracle_cloud_app_role_id
-#
-#   lifecycle {
-#     precondition {
-#       condition     = local.oracle_cloud_app_role_id != null
-#       error_message = "Unable to determine an app role ID for the Oracle Cloud service principal. Ensure it exposes an enabled app role (for example 'User') or set 'oracle_cloud_service_principal_app_role_value' accordingly."
-#     }
-#   }
-# }
-
-# ===============================================================================
-# Role Assignments for Shared ODAA Resources
-# ===============================================================================
-
-resource "azurerm_role_assignment" "odaa_autonomous_database_admin_per_user" {
-  for_each = local.deployments
-
-  provider             = azurerm.odaa
-  scope                = local.odaa_modules[each.key].resource_group_id
-  role_definition_name = "Oracle.Database Autonomous Database Administrator"
-  principal_id         = local.deployment_user_object_ids[each.key]
-  description          = "Grants ${each.value.name} exclusive admin permissions for their Oracle Autonomous Database resources in resource group ${local.odaa_modules[each.key].resource_group_name}."
-}
-
-resource "azurerm_role_definition" "private_dns_zone_reader" {
-  name        = "custom-private-dns-zone-reader"
-  scope       = data.azurerm_subscription.odaa.id
-  description = "Allows read-only access to Private DNS Zones."
-
-  permissions {
-    actions = [
-      "Microsoft.Network/privateDnsZones/read",
-      "Microsoft.Network/privateDnsZones/*/read"
-    ]
-  }
-
-  assignable_scopes = [
-    data.azurerm_subscription.odaa.id
-  ]
-}
-
-resource "azurerm_role_assignment" "odaa_private_dns_zone_reader_group" {
-  provider           = azurerm.odaa
-  scope              = data.azurerm_subscription.odaa.id
-  role_definition_id = azurerm_role_definition.private_dns_zone_reader.role_definition_resource_id
-  principal_id       = local.identity_group_object_id
-  description        = "Grants ${local.identity_group_display_name} read access to Private DNS Zones across subscription ${data.azurerm_subscription.odaa.display_name}."
-}
-
-
-
-resource "azurerm_role_assignment" "odaa_subscription_manager_reader_group" {
-  provider           = azurerm.odaa
-  scope              = data.azurerm_subscription.odaa.id
-  role_definition_id = azurerm_role_definition.oracle_subscriptions_manager_reader.role_definition_resource_id
-  principal_id       = local.identity_group_object_id
-  description        = "Grants ${local.identity_group_display_name} read access to Oracle Subscription resources across subscription ${data.azurerm_subscription.odaa.display_name}."
-}
-
-# ===============================================================================
-# AKS Deployments per Subscription Slot
-# ===============================================================================
-
-module "aks_slot_0" {
-  for_each = local.aks_deployments_by_slot["0"]
-  source   = "./modules/aks"
+module "shared" {
+  source = "./modules/shared"
 
   providers = {
-    azurerm = azurerm.aks_deployment_slot_0
+    azurerm = azurerm.vm
   }
 
-  prefix                    = each.value.prefix
-  postfix                   = each.value.postfix
-  location                  = each.value.location
-  cidr                      = each.value.aks_cidr
-  service_cidr              = each.value.aks_service_cidr
-  aks_vm_size               = each.value.aks_vm_size
-  os_disk_type              = each.value.aks_os_disk_type
-  deployment_user_object_id = local.deployment_user_object_ids[each.key]
-  subscription_id           = each.value.subscription_id
-  fqdn_odaa_fra             = each.value.fqdn_odaa_fra
-  fqdn_odaa_app_fra         = each.value.fqdn_odaa_app_fra
-  fqdn_odaa_par             = each.value.fqdn_odaa_par
-  fqdn_odaa_app_par         = each.value.fqdn_odaa_app_par
-  enabled_odaa_regions      = var.enabled_odaa_regions
-
-  tags = merge(local.common_tags, {
-    AKSDeployment = each.value.name
-  })
+  location           = var.location
+  gallery_name       = var.gallery_name
+  image_name         = var.image_name
+  odaa_dns_zone_name = var.odaa_dns_zone_name
+  tags               = var.tags
 }
 
-module "aks_slot_1" {
-  for_each = local.aks_deployments_by_slot["1"]
-  source   = "./modules/aks"
+# ===============================================================================
+# USER 00
+# ===============================================================================
+
+module "user_vm_00" {
+  source = "./modules/user-vm"
 
   providers = {
-    azurerm = azurerm.aks_deployment_slot_1
+    azurerm = azurerm.vm
   }
 
-  prefix                    = each.value.prefix
-  postfix                   = each.value.postfix
-  location                  = each.value.location
-  cidr                      = each.value.aks_cidr
-  service_cidr              = each.value.aks_service_cidr
-  aks_vm_size               = each.value.aks_vm_size
-  os_disk_type              = each.value.aks_os_disk_type
-  deployment_user_object_id = local.deployment_user_object_ids[each.key]
-  subscription_id           = each.value.subscription_id
-  fqdn_odaa_fra             = each.value.fqdn_odaa_fra
-  fqdn_odaa_app_fra         = each.value.fqdn_odaa_app_fra
-  fqdn_odaa_par             = each.value.fqdn_odaa_par
-  fqdn_odaa_app_par         = each.value.fqdn_odaa_app_par
-  enabled_odaa_regions      = var.enabled_odaa_regions
-
-  tags = merge(local.common_tags, {
-    AKSDeployment = each.value.name
-  })
+  user_index              = 0
+  location                = var.location
+  vnet_cidr               = "10.0.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
 }
 
-module "aks_slot_2" {
-  for_each = local.aks_deployments_by_slot["2"]
-  source   = "./modules/aks"
-
-  providers = {
-    azurerm = azurerm.aks_deployment_slot_2
-  }
-
-  prefix                    = each.value.prefix
-  postfix                   = each.value.postfix
-  location                  = each.value.location
-  cidr                      = each.value.aks_cidr
-  service_cidr              = each.value.aks_service_cidr
-  aks_vm_size               = each.value.aks_vm_size
-  os_disk_type              = each.value.aks_os_disk_type
-  deployment_user_object_id = local.deployment_user_object_ids[each.key]
-  subscription_id           = each.value.subscription_id
-  fqdn_odaa_fra             = each.value.fqdn_odaa_fra
-  fqdn_odaa_app_fra         = each.value.fqdn_odaa_app_fra
-  fqdn_odaa_par             = each.value.fqdn_odaa_par
-  fqdn_odaa_app_par         = each.value.fqdn_odaa_app_par
-  enabled_odaa_regions      = var.enabled_odaa_regions
-
-  tags = merge(local.common_tags, {
-    AKSDeployment = each.value.name
-  })
-}
-
-module "aks_slot_3" {
-  for_each = local.aks_deployments_by_slot["3"]
-  source   = "./modules/aks"
-
-  providers = {
-    azurerm = azurerm.aks_deployment_slot_3
-  }
-
-  prefix                    = each.value.prefix
-  postfix                   = each.value.postfix
-  location                  = each.value.location
-  cidr                      = each.value.aks_cidr
-  service_cidr              = each.value.aks_service_cidr
-  aks_vm_size               = each.value.aks_vm_size
-  os_disk_type              = each.value.aks_os_disk_type
-  deployment_user_object_id = local.deployment_user_object_ids[each.key]
-  subscription_id           = each.value.subscription_id
-  fqdn_odaa_fra             = each.value.fqdn_odaa_fra
-  fqdn_odaa_app_fra         = each.value.fqdn_odaa_app_fra
-  fqdn_odaa_par             = each.value.fqdn_odaa_par
-  fqdn_odaa_app_par         = each.value.fqdn_odaa_app_par
-  enabled_odaa_regions      = var.enabled_odaa_regions
-
-  tags = merge(local.common_tags, {
-    AKSDeployment = each.value.name
-  })
-}
-
-module "aks_slot_4" {
-  for_each = local.aks_deployments_by_slot["4"]
-  source   = "./modules/aks"
-
-  providers = {
-    azurerm = azurerm.aks_deployment_slot_4
-  }
-
-  prefix                    = each.value.prefix
-  postfix                   = each.value.postfix
-  location                  = each.value.location
-  cidr                      = each.value.aks_cidr
-  service_cidr              = each.value.aks_service_cidr
-  aks_vm_size               = each.value.aks_vm_size
-  os_disk_type              = each.value.aks_os_disk_type
-  deployment_user_object_id = local.deployment_user_object_ids[each.key]
-  subscription_id           = each.value.subscription_id
-  fqdn_odaa_fra             = each.value.fqdn_odaa_fra
-  fqdn_odaa_app_fra         = each.value.fqdn_odaa_app_fra
-  fqdn_odaa_par             = each.value.fqdn_odaa_par
-  fqdn_odaa_app_par         = each.value.fqdn_odaa_app_par
-  enabled_odaa_regions      = var.enabled_odaa_regions
-
-  tags = merge(local.common_tags, {
-    AKSDeployment = each.value.name
-  })
-}
-
-locals {
-  aks_modules = merge(
-    module.aks_slot_0,
-    module.aks_slot_1,
-    module.aks_slot_2,
-    module.aks_slot_3,
-    module.aks_slot_4,
-  )
-}
-
-# ===============================================================================
-# Ingress Controller Deployment
-# ===============================================================================
-# Ingress controllers are now deployed via the deploy-ingress-controllers.ps1 
-# script after terraform apply completes. This approach removes the helm provider
-# constraint and allows scaling to unlimited users.
-#
-# To deploy ingress controllers:
-#   .\scripts\deploy-ingress-controllers.ps1
-#
-# To uninstall ingress controllers:
-#   .\scripts\deploy-ingress-controllers.ps1 -Uninstall
-# ===============================================================================
-
-# ===============================================================================
-# Per-User Oracle Database@Azure Networks (Isolated)
-# ===============================================================================
-# Each user gets their own ODAA VNet (192.168.0.0/16) - isolated by VNet boundaries
-# No peering between ODAA VNets = complete user isolation
-
-module "odaa_slot_0" {
-  source = "./modules/odaa"
-
-  for_each = local.aks_deployments_by_slot["0"]
+module "user_odaa_00" {
+  source = "./modules/user-odaa"
 
   providers = {
     azurerm = azurerm.odaa
   }
 
-  prefix                     = each.value.prefix
-  postfix                    = each.value.postfix
-  location                   = each.value.location
-  cidr                       = each.value.odaa_cidr
-  password                   = null
-  create_autonomous_database = false
-
-  tags = merge(local.common_tags, {
-    ODAAFor   = each.value.name
-    UserIndex = each.value.index
-  })
+  user_index = 0
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
 }
 
-module "odaa_slot_1" {
-  source = "./modules/odaa"
+module "peering_00" {
+  source = "./modules/vnet-peering"
 
-  for_each = local.aks_deployments_by_slot["1"]
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_00.vnet_id
+  vm_vnet_name        = module.user_vm_00.vnet_name
+  vm_resource_group   = module.user_vm_00.resource_group_name
+  odaa_vnet_id        = module.user_odaa_00.vnet_id
+  odaa_vnet_name      = module.user_odaa_00.vnet_name
+  odaa_resource_group = module.user_odaa_00.resource_group_name
+  peering_suffix      = "user00"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 01
+# ===============================================================================
+
+module "user_vm_01" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 1
+  location                = var.location
+  vnet_cidr               = "10.1.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_01" {
+  source = "./modules/user-odaa"
 
   providers = {
     azurerm = azurerm.odaa
   }
 
-  prefix                     = each.value.prefix
-  postfix                    = each.value.postfix
-  location                   = each.value.location
-  cidr                       = each.value.odaa_cidr
-  password                   = null
-  create_autonomous_database = false
-
-  tags = merge(local.common_tags, {
-    ODAAFor   = each.value.name
-    UserIndex = each.value.index
-  })
+  user_index = 1
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
 }
 
-module "odaa_slot_2" {
-  source = "./modules/odaa"
+module "peering_01" {
+  source = "./modules/vnet-peering"
 
-  for_each = local.aks_deployments_by_slot["2"]
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_01.vnet_id
+  vm_vnet_name        = module.user_vm_01.vnet_name
+  vm_resource_group   = module.user_vm_01.resource_group_name
+  odaa_vnet_id        = module.user_odaa_01.vnet_id
+  odaa_vnet_name      = module.user_odaa_01.vnet_name
+  odaa_resource_group = module.user_odaa_01.resource_group_name
+  peering_suffix      = "user01"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 02
+# ===============================================================================
+
+module "user_vm_02" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 2
+  location                = var.location
+  vnet_cidr               = "10.2.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_02" {
+  source = "./modules/user-odaa"
 
   providers = {
     azurerm = azurerm.odaa
   }
 
-  prefix                     = each.value.prefix
-  postfix                    = each.value.postfix
-  location                   = each.value.location
-  cidr                       = each.value.odaa_cidr
-  password                   = null
-  create_autonomous_database = false
-
-  tags = merge(local.common_tags, {
-    ODAAFor   = each.value.name
-    UserIndex = each.value.index
-  })
+  user_index = 2
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
 }
 
-module "odaa_slot_3" {
-  source = "./modules/odaa"
+module "peering_02" {
+  source = "./modules/vnet-peering"
 
-  for_each = local.aks_deployments_by_slot["3"]
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_02.vnet_id
+  vm_vnet_name        = module.user_vm_02.vnet_name
+  vm_resource_group   = module.user_vm_02.resource_group_name
+  odaa_vnet_id        = module.user_odaa_02.vnet_id
+  odaa_vnet_name      = module.user_odaa_02.vnet_name
+  odaa_resource_group = module.user_odaa_02.resource_group_name
+  peering_suffix      = "user02"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 03
+# ===============================================================================
+
+module "user_vm_03" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 3
+  location                = var.location
+  vnet_cidr               = "10.3.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_03" {
+  source = "./modules/user-odaa"
 
   providers = {
     azurerm = azurerm.odaa
   }
 
-  prefix                     = each.value.prefix
-  postfix                    = each.value.postfix
-  location                   = each.value.location
-  cidr                       = each.value.odaa_cidr
-  password                   = null
-  create_autonomous_database = false
-
-  tags = merge(local.common_tags, {
-    ODAAFor   = each.value.name
-    UserIndex = each.value.index
-  })
+  user_index = 3
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
 }
 
-module "odaa_slot_4" {
-  source = "./modules/odaa"
+module "peering_03" {
+  source = "./modules/vnet-peering"
 
-  for_each = local.aks_deployments_by_slot["4"]
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_03.vnet_id
+  vm_vnet_name        = module.user_vm_03.vnet_name
+  vm_resource_group   = module.user_vm_03.resource_group_name
+  odaa_vnet_id        = module.user_odaa_03.vnet_id
+  odaa_vnet_name      = module.user_odaa_03.vnet_name
+  odaa_resource_group = module.user_odaa_03.resource_group_name
+  peering_suffix      = "user03"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 04
+# ===============================================================================
+
+module "user_vm_04" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 4
+  location                = var.location
+  vnet_cidr               = "10.4.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_04" {
+  source = "./modules/user-odaa"
 
   providers = {
     azurerm = azurerm.odaa
   }
 
-  prefix                     = each.value.prefix
-  postfix                    = each.value.postfix
-  location                   = each.value.location
-  cidr                       = each.value.odaa_cidr
-  password                   = null
-  create_autonomous_database = false
-
-  tags = merge(local.common_tags, {
-    ODAAFor   = each.value.name
-    UserIndex = each.value.index
-  })
+  user_index = 4
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
 }
 
-# ===============================================================================
-# ODAA Module Outputs Map
-# ===============================================================================
-# Maps each deployment key to its corresponding ODAA module output
-
-locals {
-  odaa_modules = merge(
-    module.odaa_slot_0,
-    module.odaa_slot_1,
-    module.odaa_slot_2,
-    module.odaa_slot_3,
-    module.odaa_slot_4
-  )
-}
-
-# ===============================================================================
-# Deterministic Suffix for ADB Names
-# ===============================================================================
-# Creates a human-readable suffix using airport code + creation date (e.g., par251102)
-# This ensures uniqueness while providing context about location and deployment time
-
-# Capture creation timestamp once (stable across future applies)
-resource "null_resource" "adb_creation_time" {
-  triggers = {
-    timestamp = timestamp()
-  }
-
-  lifecycle {
-    ignore_changes = [triggers]
-  }
-}
-
-locals {
-  # Sanitize event name for OCI (alphanumeric only, max 8 chars)
-  sanitized_event_name = lower(replace(replace(replace(
-    substr(local.microhack_event_name, 0, 8),
-  "-", ""), "_", ""), ".", ""))
-
-  # Map Azure regions to IATA airport codes
-  location_to_airport_code = {
-    "francecentral"      = "par" # Paris
-    "germanywestcentral" = "fra" # Frankfurt
-  }
-
-  # Get airport code for current location (fallback to first 3 chars if not found)
-  airport_code = lookup(
-    local.location_to_airport_code,
-    lower(var.location),
-    substr(replace(var.location, "/[^a-z]/", ""), 0, 3)
-  )
-
-  # Create deterministic suffix: airport code + YYMMDD (e.g., par251102)
-  adb_descriptive_suffix = {
-    for key, deployment in local.deployments : key => lower(format("%s%s",
-      local.airport_code,
-      formatdate("YYMMDD", null_resource.adb_creation_time.triggers.timestamp)
-    ))
-  }
-}
-
-# ===============================================================================
-# Oracle Autonomous Databases
-# ===============================================================================
-# Creates ADB instances for each deployment. All ADBs are created in parallel.
-
-resource "azurerm_oracle_autonomous_database" "user" {
-  for_each = var.create_oracle_database ? local.deployments : {}
-
-  name = lower(format("%s%s%s%s",
-    local.sanitized_event_name,
-    each.value.prefix,
-    each.value.postfix,
-    local.adb_descriptive_suffix[each.key]
-  ))
-
-  display_name = lower(format("%s%s%s%s",
-    var.microhack_event_name,
-    each.value.prefix,
-    each.value.postfix,
-    local.adb_descriptive_suffix[each.key]
-  ))
-
-  resource_group_name = local.odaa_modules[each.key].resource_group_name
-  location            = var.location
-
-  admin_password                   = var.adb_admin_password
-  allowed_ips                      = []
-  auto_scaling_enabled             = false
-  auto_scaling_for_storage_enabled = false
-  backup_retention_period_in_days  = 1
-  character_set                    = "AL32UTF8"
-  compute_count                    = 2
-  compute_model                    = "ECPU"
-  customer_contacts                = ["maik.sandmann@gmx.net"]
-  data_storage_size_in_tbs         = 1
-  db_version                       = "23ai"
-  db_workload                      = "OLTP"
-  license_model                    = "BringYourOwnLicense"
-  mtls_connection_required         = false
-  national_character_set           = "AL16UTF16"
-  subnet_id                        = local.odaa_modules[each.key].subnet_id
-  virtual_network_id               = local.odaa_modules[each.key].vnet_id
-
-  tags = merge(local.common_tags, {
-    AKSDeployment = each.value.name
-    ODAAFor       = each.value.name
-  })
-
-  depends_on = [
-    module.odaa_slot_0,
-    module.odaa_slot_1,
-    module.odaa_slot_2,
-    module.odaa_slot_3,
-    module.odaa_slot_4
-  ]
-}
-
-# ===============================================================================
-# VNet Peering Between AKS and Shared ODAA Network
-# ===============================================================================
-
-module "vnet_peering_slot_0" {
-  for_each = local.aks_deployments_by_slot["0"]
-  source   = "./modules/vnet-peering"
+module "peering_04" {
+  source = "./modules/vnet-peering"
 
   providers = {
-    azurerm.aks  = azurerm.aks_deployment_slot_0
+    azurerm.vm   = azurerm.vm
     azurerm.odaa = azurerm.odaa
   }
 
-  aks_vnet_id          = local.aks_modules[each.key].vnet_id
-  aks_vnet_name        = local.aks_modules[each.key].vnet_name
-  aks_resource_group   = local.aks_modules[each.key].resource_group_name
-  odaa_vnet_id         = module.odaa_slot_0[each.key].vnet_id
-  odaa_vnet_name       = module.odaa_slot_0[each.key].vnet_name
-  odaa_resource_group  = module.odaa_slot_0[each.key].resource_group_name
-  odaa_subscription_id = var.odaa_subscription_id
-  peering_suffix       = each.value.name
-
-  tags = merge(local.common_tags, {
-    AKSDeployment = each.value.name
-    PeeringFor    = each.value.name
-  })
-}
-
-module "vnet_peering_slot_1" {
-  for_each = local.aks_deployments_by_slot["1"]
-  source   = "./modules/vnet-peering"
-
-  providers = {
-    azurerm.aks  = azurerm.aks_deployment_slot_1
-    azurerm.odaa = azurerm.odaa
-  }
-
-  aks_vnet_id          = local.aks_modules[each.key].vnet_id
-  aks_vnet_name        = local.aks_modules[each.key].vnet_name
-  aks_resource_group   = local.aks_modules[each.key].resource_group_name
-  odaa_vnet_id         = module.odaa_slot_1[each.key].vnet_id
-  odaa_vnet_name       = module.odaa_slot_1[each.key].vnet_name
-  odaa_resource_group  = module.odaa_slot_1[each.key].resource_group_name
-  odaa_subscription_id = var.odaa_subscription_id
-  peering_suffix       = each.value.name
-
-  tags = merge(local.common_tags, {
-    AKSDeployment = each.value.name
-    PeeringFor    = each.value.name
-  })
-}
-
-module "vnet_peering_slot_2" {
-  for_each = local.aks_deployments_by_slot["2"]
-  source   = "./modules/vnet-peering"
-
-  providers = {
-    azurerm.aks  = azurerm.aks_deployment_slot_2
-    azurerm.odaa = azurerm.odaa
-  }
-
-  aks_vnet_id          = local.aks_modules[each.key].vnet_id
-  aks_vnet_name        = local.aks_modules[each.key].vnet_name
-  aks_resource_group   = local.aks_modules[each.key].resource_group_name
-  odaa_vnet_id         = module.odaa_slot_2[each.key].vnet_id
-  odaa_vnet_name       = module.odaa_slot_2[each.key].vnet_name
-  odaa_resource_group  = module.odaa_slot_2[each.key].resource_group_name
-  odaa_subscription_id = var.odaa_subscription_id
-  peering_suffix       = each.value.name
-
-  tags = merge(local.common_tags, {
-    AKSDeployment = each.value.name
-    PeeringFor    = each.value.name
-  })
-}
-
-module "vnet_peering_slot_3" {
-  for_each = local.aks_deployments_by_slot["3"]
-  source   = "./modules/vnet-peering"
-
-  providers = {
-    azurerm.aks  = azurerm.aks_deployment_slot_3
-    azurerm.odaa = azurerm.odaa
-  }
-
-  aks_vnet_id          = local.aks_modules[each.key].vnet_id
-  aks_vnet_name        = local.aks_modules[each.key].vnet_name
-  aks_resource_group   = local.aks_modules[each.key].resource_group_name
-  odaa_vnet_id         = module.odaa_slot_3[each.key].vnet_id
-  odaa_vnet_name       = module.odaa_slot_3[each.key].vnet_name
-  odaa_resource_group  = module.odaa_slot_3[each.key].resource_group_name
-  odaa_subscription_id = var.odaa_subscription_id
-  peering_suffix       = each.value.name
-
-  tags = merge(local.common_tags, {
-    AKSDeployment = each.value.name
-    PeeringFor    = each.value.name
-  })
-}
-
-module "vnet_peering_slot_4" {
-  for_each = local.aks_deployments_by_slot["4"]
-  source   = "./modules/vnet-peering"
-
-  providers = {
-    azurerm.aks  = azurerm.aks_deployment_slot_4
-    azurerm.odaa = azurerm.odaa
-  }
-
-  aks_vnet_id          = local.aks_modules[each.key].vnet_id
-  aks_vnet_name        = local.aks_modules[each.key].vnet_name
-  aks_resource_group   = local.aks_modules[each.key].resource_group_name
-  odaa_vnet_id         = module.odaa_slot_4[each.key].vnet_id
-  odaa_vnet_name       = module.odaa_slot_4[each.key].vnet_name
-  odaa_resource_group  = module.odaa_slot_4[each.key].resource_group_name
-  odaa_subscription_id = var.odaa_subscription_id
-  peering_suffix       = each.value.name
-
-  tags = merge(local.common_tags, {
-    AKSDeployment = each.value.name
-    PeeringFor    = each.value.name
-  })
-}
-
-locals {
-  vnet_peering_modules = merge(
-    module.vnet_peering_slot_0,
-    module.vnet_peering_slot_1,
-    module.vnet_peering_slot_2,
-    module.vnet_peering_slot_3,
-    module.vnet_peering_slot_4,
-  )
+  vm_vnet_id          = module.user_vm_04.vnet_id
+  vm_vnet_name        = module.user_vm_04.vnet_name
+  vm_resource_group   = module.user_vm_04.resource_group_name
+  odaa_vnet_id        = module.user_odaa_04.vnet_id
+  odaa_vnet_name      = module.user_odaa_04.vnet_name
+  odaa_resource_group = module.user_odaa_04.resource_group_name
+  peering_suffix      = "user04"
+  tags                = var.tags
 }
 
 # ===============================================================================
-# Outputs
+# USER 05
 # ===============================================================================
 
-output "aks_clusters" {
-  description = "Information about all AKS clusters deployed"
-  value = {
-    for key, deployment in local.deployments : deployment.name => {
-      cluster_id          = local.aks_modules[key].aks_cluster_id
-      cluster_name        = local.aks_modules[key].aks_cluster_name
-      vnet_id             = local.aks_modules[key].vnet_id
-      vnet_name           = local.aks_modules[key].vnet_name
-      resource_group_name = local.aks_modules[key].resource_group_name
-      dns_zones           = local.aks_modules[key].dns_zones
-    }
+module "user_vm_05" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
   }
+
+  user_index              = 5
+  location                = var.location
+  vnet_cidr               = "10.5.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
 }
 
-output "odaa_networks" {
-  description = "Information about the per-user ODAA networks"
-  value = {
-    for key, deployment in local.deployments : deployment.name => {
-      resource_group_name = local.odaa_modules[key].resource_group_name
-      resource_group_id   = local.odaa_modules[key].resource_group_id
-      vnet_id             = local.odaa_modules[key].vnet_id
-      vnet_name           = local.odaa_modules[key].vnet_name
-      subnet_id           = local.odaa_modules[key].subnet_id
-    }
+module "user_odaa_05" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
   }
+
+  user_index = 5
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
 }
 
-output "odaa_autonomous_databases" {
-  description = "Oracle Autonomous Databases provisioned for each deployment"
-  value = {
-    for key, deployment in local.deployments : deployment.name => (
-      var.create_oracle_database && contains(keys(azurerm_oracle_autonomous_database.user), key) ?
-      {
-        id                  = azurerm_oracle_autonomous_database.user[key].id
-        name                = azurerm_oracle_autonomous_database.user[key].name
-        display_name        = azurerm_oracle_autonomous_database.user[key].display_name
-        resource_group_name = local.odaa_modules[key].resource_group_name
-        descriptive_suffix  = local.adb_descriptive_suffix[key]
-      } : null
-    )
+module "peering_05" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
   }
+
+  vm_vnet_id          = module.user_vm_05.vnet_id
+  vm_vnet_name        = module.user_vm_05.vnet_name
+  vm_resource_group   = module.user_vm_05.resource_group_name
+  odaa_vnet_id        = module.user_odaa_05.vnet_id
+  odaa_vnet_name      = module.user_odaa_05.vnet_name
+  odaa_resource_group = module.user_odaa_05.resource_group_name
+  peering_suffix      = "user05"
+  tags                = var.tags
 }
 
-output "entra_id_deployment_group" {
-  description = "Information about the Entra ID deployment group"
-  value = {
-    for key, deployment in local.deployments : deployment.name => {
-      object_id     = local.identity_group_object_id
-      display_name  = local.identity_group_display_name
-      mail_nickname = local.shared_deployment_group.name
-    }
+# ===============================================================================
+# USER 06
+# ===============================================================================
+
+module "user_vm_06" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
   }
+
+  user_index              = 6
+  location                = var.location
+  vnet_cidr               = "10.6.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
 }
 
-output "vnet_peering_connections" {
-  description = "Information about all VNet peering connections"
-  value = {
-    for key, deployment in local.deployments : deployment.name => {
-      aks_to_odaa_peering_id = local.vnet_peering_modules[key].aks_to_odaa_peering_id
-      odaa_to_aks_peering_id = local.vnet_peering_modules[key].odaa_to_aks_peering_id
-    }
+module "user_odaa_06" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
   }
+
+  user_index = 6
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
 }
 
-output "deployment_summary" {
-  description = "Summary of all deployments"
-  value = {
-    total_aks_deployments = length(local.deployments)
-    deployment_names      = local.deployment_names
-    odaa_subscription_id  = var.odaa_subscription_id
-    identity_file_path    = local.identity_file_path
-    entra_group_display_names = {
-      for key, deployment in local.deployments : deployment.name => local.identity_group_display_name
-    }
+module "peering_06" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
   }
+
+  vm_vnet_id          = module.user_vm_06.vnet_id
+  vm_vnet_name        = module.user_vm_06.vnet_name
+  vm_resource_group   = module.user_vm_06.resource_group_name
+  odaa_vnet_id        = module.user_odaa_06.vnet_id
+  odaa_vnet_name      = module.user_odaa_06.vnet_name
+  odaa_resource_group = module.user_odaa_06.resource_group_name
+  peering_suffix      = "user06"
+  tags                = var.tags
 }
 
-output "aks_kubeconfigs" {
-  description = "Kubeconfig files for all AKS clusters (for deployment automation only)"
-  value = {
-    for key, deployment in local.deployments : deployment.name => {
-      kubeconfig_raw      = local.aks_modules[key].aks_cluster_kube_config_raw
-      cluster_name        = local.aks_modules[key].aks_cluster_name
-      resource_group_name = local.aks_modules[key].resource_group_name
-      subscription_id     = deployment.subscription_id
-    }
+# ===============================================================================
+# USER 07
+# ===============================================================================
+
+module "user_vm_07" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
   }
-  sensitive = true
+
+  user_index              = 7
+  location                = var.location
+  vnet_cidr               = "10.7.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
 }
 
+module "user_odaa_07" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 7
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_07" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_07.vnet_id
+  vm_vnet_name        = module.user_vm_07.vnet_name
+  vm_resource_group   = module.user_vm_07.resource_group_name
+  odaa_vnet_id        = module.user_odaa_07.vnet_id
+  odaa_vnet_name      = module.user_odaa_07.vnet_name
+  odaa_resource_group = module.user_odaa_07.resource_group_name
+  peering_suffix      = "user07"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 08
+# ===============================================================================
+
+module "user_vm_08" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 8
+  location                = var.location
+  vnet_cidr               = "10.8.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_08" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 8
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_08" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_08.vnet_id
+  vm_vnet_name        = module.user_vm_08.vnet_name
+  vm_resource_group   = module.user_vm_08.resource_group_name
+  odaa_vnet_id        = module.user_odaa_08.vnet_id
+  odaa_vnet_name      = module.user_odaa_08.vnet_name
+  odaa_resource_group = module.user_odaa_08.resource_group_name
+  peering_suffix      = "user08"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 09
+# ===============================================================================
+
+module "user_vm_09" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 9
+  location                = var.location
+  vnet_cidr               = "10.9.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_09" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 9
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_09" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_09.vnet_id
+  vm_vnet_name        = module.user_vm_09.vnet_name
+  vm_resource_group   = module.user_vm_09.resource_group_name
+  odaa_vnet_id        = module.user_odaa_09.vnet_id
+  odaa_vnet_name      = module.user_odaa_09.vnet_name
+  odaa_resource_group = module.user_odaa_09.resource_group_name
+  peering_suffix      = "user09"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 10
+# ===============================================================================
+
+module "user_vm_10" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 10
+  location                = var.location
+  vnet_cidr               = "10.10.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_10" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 10
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_10" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_10.vnet_id
+  vm_vnet_name        = module.user_vm_10.vnet_name
+  vm_resource_group   = module.user_vm_10.resource_group_name
+  odaa_vnet_id        = module.user_odaa_10.vnet_id
+  odaa_vnet_name      = module.user_odaa_10.vnet_name
+  odaa_resource_group = module.user_odaa_10.resource_group_name
+  peering_suffix      = "user10"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 11
+# ===============================================================================
+
+module "user_vm_11" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 11
+  location                = var.location
+  vnet_cidr               = "10.11.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_11" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 11
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_11" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_11.vnet_id
+  vm_vnet_name        = module.user_vm_11.vnet_name
+  vm_resource_group   = module.user_vm_11.resource_group_name
+  odaa_vnet_id        = module.user_odaa_11.vnet_id
+  odaa_vnet_name      = module.user_odaa_11.vnet_name
+  odaa_resource_group = module.user_odaa_11.resource_group_name
+  peering_suffix      = "user11"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 12
+# ===============================================================================
+
+module "user_vm_12" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 12
+  location                = var.location
+  vnet_cidr               = "10.12.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_12" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 12
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_12" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_12.vnet_id
+  vm_vnet_name        = module.user_vm_12.vnet_name
+  vm_resource_group   = module.user_vm_12.resource_group_name
+  odaa_vnet_id        = module.user_odaa_12.vnet_id
+  odaa_vnet_name      = module.user_odaa_12.vnet_name
+  odaa_resource_group = module.user_odaa_12.resource_group_name
+  peering_suffix      = "user12"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 13
+# ===============================================================================
+
+module "user_vm_13" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 13
+  location                = var.location
+  vnet_cidr               = "10.13.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_13" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 13
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_13" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_13.vnet_id
+  vm_vnet_name        = module.user_vm_13.vnet_name
+  vm_resource_group   = module.user_vm_13.resource_group_name
+  odaa_vnet_id        = module.user_odaa_13.vnet_id
+  odaa_vnet_name      = module.user_odaa_13.vnet_name
+  odaa_resource_group = module.user_odaa_13.resource_group_name
+  peering_suffix      = "user13"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 14
+# ===============================================================================
+
+module "user_vm_14" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 14
+  location                = var.location
+  vnet_cidr               = "10.14.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_14" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 14
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_14" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_14.vnet_id
+  vm_vnet_name        = module.user_vm_14.vnet_name
+  vm_resource_group   = module.user_vm_14.resource_group_name
+  odaa_vnet_id        = module.user_odaa_14.vnet_id
+  odaa_vnet_name      = module.user_odaa_14.vnet_name
+  odaa_resource_group = module.user_odaa_14.resource_group_name
+  peering_suffix      = "user14"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 15
+# ===============================================================================
+
+module "user_vm_15" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 15
+  location                = var.location
+  vnet_cidr               = "10.15.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_15" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 15
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_15" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_15.vnet_id
+  vm_vnet_name        = module.user_vm_15.vnet_name
+  vm_resource_group   = module.user_vm_15.resource_group_name
+  odaa_vnet_id        = module.user_odaa_15.vnet_id
+  odaa_vnet_name      = module.user_odaa_15.vnet_name
+  odaa_resource_group = module.user_odaa_15.resource_group_name
+  peering_suffix      = "user15"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 16
+# ===============================================================================
+
+module "user_vm_16" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 16
+  location                = var.location
+  vnet_cidr               = "10.16.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_16" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 16
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_16" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_16.vnet_id
+  vm_vnet_name        = module.user_vm_16.vnet_name
+  vm_resource_group   = module.user_vm_16.resource_group_name
+  odaa_vnet_id        = module.user_odaa_16.vnet_id
+  odaa_vnet_name      = module.user_odaa_16.vnet_name
+  odaa_resource_group = module.user_odaa_16.resource_group_name
+  peering_suffix      = "user16"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 17
+# ===============================================================================
+
+module "user_vm_17" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 17
+  location                = var.location
+  vnet_cidr               = "10.17.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_17" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 17
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_17" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_17.vnet_id
+  vm_vnet_name        = module.user_vm_17.vnet_name
+  vm_resource_group   = module.user_vm_17.resource_group_name
+  odaa_vnet_id        = module.user_odaa_17.vnet_id
+  odaa_vnet_name      = module.user_odaa_17.vnet_name
+  odaa_resource_group = module.user_odaa_17.resource_group_name
+  peering_suffix      = "user17"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 18
+# ===============================================================================
+
+module "user_vm_18" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 18
+  location                = var.location
+  vnet_cidr               = "10.18.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_18" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 18
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_18" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_18.vnet_id
+  vm_vnet_name        = module.user_vm_18.vnet_name
+  vm_resource_group   = module.user_vm_18.resource_group_name
+  odaa_vnet_id        = module.user_odaa_18.vnet_id
+  odaa_vnet_name      = module.user_odaa_18.vnet_name
+  odaa_resource_group = module.user_odaa_18.resource_group_name
+  peering_suffix      = "user18"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 19
+# ===============================================================================
+
+module "user_vm_19" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 19
+  location                = var.location
+  vnet_cidr               = "10.19.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_19" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 19
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_19" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_19.vnet_id
+  vm_vnet_name        = module.user_vm_19.vnet_name
+  vm_resource_group   = module.user_vm_19.resource_group_name
+  odaa_vnet_id        = module.user_odaa_19.vnet_id
+  odaa_vnet_name      = module.user_odaa_19.vnet_name
+  odaa_resource_group = module.user_odaa_19.resource_group_name
+  peering_suffix      = "user19"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 20
+# ===============================================================================
+
+module "user_vm_20" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 20
+  location                = var.location
+  vnet_cidr               = "10.20.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_20" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 20
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_20" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_20.vnet_id
+  vm_vnet_name        = module.user_vm_20.vnet_name
+  vm_resource_group   = module.user_vm_20.resource_group_name
+  odaa_vnet_id        = module.user_odaa_20.vnet_id
+  odaa_vnet_name      = module.user_odaa_20.vnet_name
+  odaa_resource_group = module.user_odaa_20.resource_group_name
+  peering_suffix      = "user20"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 21
+# ===============================================================================
+
+module "user_vm_21" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 21
+  location                = var.location
+  vnet_cidr               = "10.21.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_21" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 21
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_21" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_21.vnet_id
+  vm_vnet_name        = module.user_vm_21.vnet_name
+  vm_resource_group   = module.user_vm_21.resource_group_name
+  odaa_vnet_id        = module.user_odaa_21.vnet_id
+  odaa_vnet_name      = module.user_odaa_21.vnet_name
+  odaa_resource_group = module.user_odaa_21.resource_group_name
+  peering_suffix      = "user21"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 22
+# ===============================================================================
+
+module "user_vm_22" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 22
+  location                = var.location
+  vnet_cidr               = "10.22.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_22" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 22
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_22" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_22.vnet_id
+  vm_vnet_name        = module.user_vm_22.vnet_name
+  vm_resource_group   = module.user_vm_22.resource_group_name
+  odaa_vnet_id        = module.user_odaa_22.vnet_id
+  odaa_vnet_name      = module.user_odaa_22.vnet_name
+  odaa_resource_group = module.user_odaa_22.resource_group_name
+  peering_suffix      = "user22"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 23
+# ===============================================================================
+
+module "user_vm_23" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 23
+  location                = var.location
+  vnet_cidr               = "10.23.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_23" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 23
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_23" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_23.vnet_id
+  vm_vnet_name        = module.user_vm_23.vnet_name
+  vm_resource_group   = module.user_vm_23.resource_group_name
+  odaa_vnet_id        = module.user_odaa_23.vnet_id
+  odaa_vnet_name      = module.user_odaa_23.vnet_name
+  odaa_resource_group = module.user_odaa_23.resource_group_name
+  peering_suffix      = "user23"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# USER 24
+# ===============================================================================
+
+module "user_vm_24" {
+  source = "./modules/user-vm"
+
+  providers = {
+    azurerm = azurerm.vm
+  }
+
+  user_index              = 24
+  location                = var.location
+  vnet_cidr               = "10.24.0.0/16"
+  vm_size                 = var.vm_size
+  vm_image_id             = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
+  admin_username          = var.admin_username
+  admin_ssh_public_key    = var.admin_ssh_public_key
+  os_disk_type            = var.vm_os_disk_type
+  os_disk_size_gb         = var.vm_os_disk_size_gb
+  create_public_ip        = var.create_public_ip
+  dns_zone_id             = module.shared.dns_zone_id
+  dns_zone_name           = module.shared.dns_zone_name
+  dns_zone_resource_group = module.shared.resource_group_name
+  tags                    = var.tags
+}
+
+module "user_odaa_24" {
+  source = "./modules/user-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+  }
+
+  user_index = 24
+  location   = var.location
+  vnet_cidr  = var.odaa_vnet_cidr
+  tags       = var.tags
+}
+
+module "peering_24" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_24.vnet_id
+  vm_vnet_name        = module.user_vm_24.vnet_name
+  vm_resource_group   = module.user_vm_24.resource_group_name
+  odaa_vnet_id        = module.user_odaa_24.vnet_id
+  odaa_vnet_name      = module.user_odaa_24.vnet_name
+  odaa_resource_group = module.user_odaa_24.resource_group_name
+  peering_suffix      = "user24"
+  tags                = var.tags
+}

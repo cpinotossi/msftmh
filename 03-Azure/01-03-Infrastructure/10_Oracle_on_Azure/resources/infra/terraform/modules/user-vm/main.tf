@@ -1,0 +1,166 @@
+# ===============================================================================
+# User VM Module - Virtual Machine Infrastructure per User
+# ===============================================================================
+# This module creates VM infrastructure for a single workshop user:
+# - Resource Group
+# - Virtual Network with Subnet
+# - Network Interface
+# - Virtual Machine (from Compute Gallery image)
+# - Private DNS Zone Link
+# ===============================================================================
+
+locals {
+  user_suffix = format("%02d", var.user_index)
+  name_prefix = "user${local.user_suffix}"
+}
+
+# ===============================================================================
+# Resource Group
+# ===============================================================================
+
+resource "azurerm_resource_group" "vm" {
+  name     = "rg-vm-${local.name_prefix}"
+  location = var.location
+  tags     = merge(var.tags, { UserIndex = var.user_index })
+}
+
+# ===============================================================================
+# Virtual Network
+# ===============================================================================
+
+resource "azurerm_virtual_network" "vm" {
+  name                = "vnet-vm-${local.name_prefix}"
+  location            = azurerm_resource_group.vm.location
+  resource_group_name = azurerm_resource_group.vm.name
+  address_space       = [var.vnet_cidr]
+  tags                = var.tags
+}
+
+resource "azurerm_subnet" "vm" {
+  name                 = "snet-vm-${local.name_prefix}"
+  resource_group_name  = azurerm_resource_group.vm.name
+  virtual_network_name = azurerm_virtual_network.vm.name
+  address_prefixes     = [cidrsubnet(var.vnet_cidr, 8, 0)] # /24 subnet
+}
+
+# ===============================================================================
+# Network Security Group
+# ===============================================================================
+
+resource "azurerm_network_security_group" "vm" {
+  name                = "nsg-vm-${local.name_prefix}"
+  location            = azurerm_resource_group.vm.location
+  resource_group_name = azurerm_resource_group.vm.name
+  tags                = var.tags
+
+  security_rule {
+    name                       = "AllowSSH"
+    priority                   = 1000
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+resource "azurerm_subnet_network_security_group_association" "vm" {
+  subnet_id                 = azurerm_subnet.vm.id
+  network_security_group_id = azurerm_network_security_group.vm.id
+}
+
+# ===============================================================================
+# Public IP (Optional - for direct SSH access)
+# ===============================================================================
+
+resource "azurerm_public_ip" "vm" {
+  count               = var.create_public_ip ? 1 : 0
+  name                = "pip-vm-${local.name_prefix}"
+  location            = azurerm_resource_group.vm.location
+  resource_group_name = azurerm_resource_group.vm.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  tags                = var.tags
+}
+
+# ===============================================================================
+# Network Interface
+# ===============================================================================
+
+resource "azurerm_network_interface" "vm" {
+  name                = "nic-vm-${local.name_prefix}"
+  location            = azurerm_resource_group.vm.location
+  resource_group_name = azurerm_resource_group.vm.name
+  tags                = var.tags
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.vm.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = var.create_public_ip ? azurerm_public_ip.vm[0].id : null
+  }
+}
+
+# ===============================================================================
+# Virtual Machine
+# ===============================================================================
+
+resource "azurerm_linux_virtual_machine" "vm" {
+  name                = "vm-${local.name_prefix}"
+  location            = azurerm_resource_group.vm.location
+  resource_group_name = azurerm_resource_group.vm.name
+  size                = var.vm_size
+  admin_username      = var.admin_username
+  tags                = merge(var.tags, { UserIndex = var.user_index })
+
+  network_interface_ids = [
+    azurerm_network_interface.vm.id
+  ]
+
+  admin_ssh_key {
+    username   = var.admin_username
+    public_key = var.admin_ssh_public_key
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = var.os_disk_type
+    disk_size_gb         = var.os_disk_size_gb
+  }
+
+  # Use image from Compute Gallery if provided, otherwise use Ubuntu
+  dynamic "source_image_reference" {
+    for_each = var.vm_image_id == null ? [1] : []
+    content {
+      publisher = "Canonical"
+      offer     = "ubuntu-24_04-lts"
+      sku       = "server"
+      version   = "latest"
+    }
+  }
+
+  source_image_id = var.vm_image_id
+
+  # Prevent accidental deletion
+  lifecycle {
+    ignore_changes = [
+      tags["CreatedDate"]
+    ]
+  }
+}
+
+# ===============================================================================
+# Private DNS Zone Link
+# ===============================================================================
+
+resource "azurerm_private_dns_zone_virtual_network_link" "odaa" {
+  count                 = var.dns_zone_id != null ? 1 : 0
+  name                  = "link-${local.name_prefix}"
+  resource_group_name   = var.dns_zone_resource_group
+  private_dns_zone_name = var.dns_zone_name
+  virtual_network_id    = azurerm_virtual_network.vm.id
+  registration_enabled  = false
+  tags                  = var.tags
+}

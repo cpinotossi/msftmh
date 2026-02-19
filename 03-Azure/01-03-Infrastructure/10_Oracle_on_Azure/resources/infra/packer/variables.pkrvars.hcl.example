@@ -1,0 +1,29 @@
+# ===============================================================================
+# Packer Variables File
+# ===============================================================================
+# Copy this file to variables.pkrvars.hcl and fill in your values.
+#
+# Usage:
+#   packer build -var-file=variables.pkrvars.hcl oracle-workshop.pkr.hcl
+# ===============================================================================
+
+# Azure Authentication (Service Principal)
+tenant_id     = "f71980b2-590a-4de9-90d5-6fbc867da951"
+client_id     = "8a9f736e-4eb2-4484-ae90-2493f57102b3"
+client_secret = "aW18Q~4b5mMhf_YV1FXGDQJSrDFTkv-ED9wR8b-p"
+
+# Azure Subscription
+subscription_id = "556f9b63-ebc9-4c7e-8437-9a05aa8cdb25"
+
+# Location
+location = "francecentral"
+
+# Compute Gallery
+gallery_name           = "gal_oracle_workshop"
+gallery_resource_group = "rg-shared-workshop"
+image_name             = "oracle-workshop-vm"
+image_version          = "1.0.0"
+
+# Build Configuration
+resource_group = "rg-packer-build"
+vm_size        = "Standard_D2s_v5"

@@ -1,0 +1,227 @@
+---
+# ===============================================================================
+# Ansible Playbook - Oracle Workshop VM Configuration
+# ===============================================================================
+# This playbook installs Oracle client tools and configures the VM for
+# connecting to Oracle Database@Azure.
+#
+# Tools installed:
+# - Oracle Instant Client (Basic + SQL*Plus)
+# - Oracle SQLcl (SQL Command Line)
+# - Java JDK 17 (required for SQLcl)
+# - Common utilities (curl, wget, unzip, etc.)
+# ===============================================================================
+
+- name: Configure Oracle Workshop VM
+  hosts: all
+  become: true
+
+  vars:
+    oracle_instant_client_version: "23.5"
+    sqlcl_version: "24.3"
+    java_version: "17"
+    oracle_base: "/opt/oracle"
+    instant_client_dir: "{{ oracle_base }}/instantclient"
+    sqlcl_dir: "{{ oracle_base }}/sqlcl"
+
+  tasks:
+    # =========================================================================
+    # System Updates and Base Packages
+    # =========================================================================
+
+    - name: Update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install base packages
+      apt:
+        name:
+          - curl
+          - wget
+          - unzip
+          - zip
+          - ca-certificates
+          - gnupg
+          - lsb-release
+          - apt-transport-https
+          - software-properties-common
+          - libaio1
+          - libaio-dev
+        state: present
+
+    # =========================================================================
+    # Java JDK Installation
+    # =========================================================================
+
+    - name: Install OpenJDK {{ java_version }}
+      apt:
+        name: "openjdk-{{ java_version }}-jdk"
+        state: present
+
+    - name: Set JAVA_HOME environment variable
+      lineinfile:
+        path: /etc/environment
+        line: 'JAVA_HOME="/usr/lib/jvm/java-{{ java_version }}-openjdk-amd64"'
+        create: true
+
+    # =========================================================================
+    # Oracle Directory Structure
+    # =========================================================================
+
+    - name: Create Oracle directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ oracle_base }}"
+        - "{{ instant_client_dir }}"
+        - "{{ sqlcl_dir }}"
+        - "{{ oracle_base }}/network/admin"
+
+    # =========================================================================
+    # Oracle Instant Client Installation
+    # =========================================================================
+
+    - name: Download Oracle Instant Client Basic
+      get_url:
+        url: "https://download.oracle.com/otn_software/linux/instantclient/2350000/instantclient-basic-linux.x64-{{ oracle_instant_client_version }}.0.24.07.zip"
+        dest: "/tmp/instantclient-basic.zip"
+        mode: '0644'
+      register: ic_basic_download
+      ignore_errors: true
+
+    - name: Download Oracle Instant Client SQL*Plus
+      get_url:
+        url: "https://download.oracle.com/otn_software/linux/instantclient/2350000/instantclient-sqlplus-linux.x64-{{ oracle_instant_client_version }}.0.24.07.zip"
+        dest: "/tmp/instantclient-sqlplus.zip"
+        mode: '0644'
+      register: ic_sqlplus_download
+      ignore_errors: true
+
+    - name: Extract Instant Client Basic
+      unarchive:
+        src: "/tmp/instantclient-basic.zip"
+        dest: "{{ oracle_base }}"
+        remote_src: true
+      when: ic_basic_download is succeeded
+
+    - name: Extract Instant Client SQL*Plus
+      unarchive:
+        src: "/tmp/instantclient-sqlplus.zip"
+        dest: "{{ oracle_base }}"
+        remote_src: true
+      when: ic_sqlplus_download is succeeded
+
+    - name: Create symlink for Instant Client
+      file:
+        src: "{{ oracle_base }}/instantclient_23_5"
+        dest: "{{ instant_client_dir }}"
+        state: link
+        force: true
+      ignore_errors: true
+
+    # =========================================================================
+    # Oracle SQLcl Installation
+    # =========================================================================
+
+    - name: Download Oracle SQLcl
+      get_url:
+        url: "https://download.oracle.com/otn_software/java/sqldeveloper/sqlcl-latest.zip"
+        dest: "/tmp/sqlcl.zip"
+        mode: '0644'
+      register: sqlcl_download
+
+    - name: Extract SQLcl
+      unarchive:
+        src: "/tmp/sqlcl.zip"
+        dest: "{{ oracle_base }}"
+        remote_src: true
+      when: sqlcl_download is succeeded
+
+    - name: Make SQLcl executable
+      file:
+        path: "{{ sqlcl_dir }}/bin/sql"
+        mode: '0755'
+      ignore_errors: true
+
+    # =========================================================================
+    # Environment Configuration
+    # =========================================================================
+
+    - name: Create Oracle environment profile
+      copy:
+        content: |
+          # Oracle Environment Variables
+          export ORACLE_BASE={{ oracle_base }}
+          export ORACLE_HOME={{ instant_client_dir }}
+          export TNS_ADMIN={{ oracle_base }}/network/admin
+          export LD_LIBRARY_PATH={{ instant_client_dir }}:$LD_LIBRARY_PATH
+          export PATH={{ instant_client_dir }}:{{ sqlcl_dir }}/bin:$PATH
+        dest: /etc/profile.d/oracle.sh
+        mode: '0644'
+
+    - name: Create sample tnsnames.ora template
+      copy:
+        content: |
+          # ===============================================================================
+          # TNS Names Configuration for Oracle Database@Azure
+          # ===============================================================================
+          # Replace the placeholder values with your actual Oracle ADB connection details.
+          # Get the connection string from Azure Portal -> Your ADB -> Connections
+          # ===============================================================================
+
+          # Example connection alias
+          # MYATP_HIGH = (description= 
+          #   (retry_count=20)(retry_delay=3)
+          #   (address=(protocol=tcps)(port=1522)(host=HOSTNAME.adb.eu-paris-1.oraclecloud.com))
+          #   (connect_data=(service_name=SERVICE_NAME_high.adb.oraclecloud.com))
+          #   (security=(ssl_server_dn_match=yes))
+          # )
+        dest: "{{ oracle_base }}/network/admin/tnsnames.ora.template"
+        mode: '0644'
+
+    # =========================================================================
+    # Cleanup
+    # =========================================================================
+
+    - name: Clean up downloaded archives
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/instantclient-basic.zip
+        - /tmp/instantclient-sqlplus.zip
+        - /tmp/sqlcl.zip
+
+    - name: Clean apt cache
+      apt:
+        autoclean: true
+        autoremove: true
+
+    # =========================================================================
+    # Verification
+    # =========================================================================
+
+    - name: Verify Java installation
+      command: java -version
+      register: java_check
+      changed_when: false
+      ignore_errors: true
+
+    - name: Display Java version
+      debug:
+        msg: "{{ java_check.stderr_lines }}"
+      when: java_check is succeeded
+
+    - name: Verify SQLcl installation
+      command: "{{ sqlcl_dir }}/bin/sql -version"
+      register: sqlcl_check
+      changed_when: false
+      ignore_errors: true
+
+    - name: Display SQLcl version
+      debug:
+        msg: "{{ sqlcl_check.stdout_lines }}"
+      when: sqlcl_check is succeeded

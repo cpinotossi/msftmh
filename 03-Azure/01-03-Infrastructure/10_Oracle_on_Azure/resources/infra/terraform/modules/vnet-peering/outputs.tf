@@ -2,30 +2,32 @@
 # VNet Peering Module - Outputs
 # ===============================================================================
 
-output "aks_to_odaa_peering_id" {
-  description = "The ID of the AKS to ODAA VNet peering"
-  value       = azurerm_virtual_network_peering.aks_to_odaa.id
+output "vm_to_odaa_peering_id" {
+  description = "The ID of the VM to ODAA VNet peering"
+  value       = azurerm_virtual_network_peering.vm_to_odaa.id
 }
 
-output "odaa_to_aks_peering_id" {
-  description = "The ID of the ODAA to AKS VNet peering"
-  value       = azurerm_virtual_network_peering.odaa_to_aks.id
+output "odaa_to_vm_peering_id" {
+  description = "The ID of the ODAA to VM VNet peering"
+  value       = azurerm_virtual_network_peering.odaa_to_vm.id
 }
 
-output "aks_vnet_info" {
-  description = "Information about the AKS virtual network"
+output "vm_vnet_info" {
+  description = "Information about the VM virtual network"
   value = {
-    id               = var.aks_vnet_id
-    name             = var.aks_vnet_name
-    resource_group   = var.aks_resource_group
+    id             = var.vm_vnet_id
+    name           = var.vm_vnet_name
+    resource_group = var.vm_resource_group
   }
 }
 
 output "odaa_vnet_info" {
   description = "Information about the ODAA virtual network"
   value = {
-    id               = var.odaa_vnet_id
-    name             = var.odaa_vnet_name
-    resource_group   = var.odaa_resource_group
+    id             = var.odaa_vnet_id
+    name           = var.odaa_vnet_name
+    resource_group = var.odaa_resource_group
+  }
+}
   }
 }

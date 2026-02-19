@@ -1,7 +1,7 @@
 # ===============================================================================
 # VNet Peering Module - Main Configuration
 # ===============================================================================
-# This module creates bidirectional VNet peering between AKS and ODAA networks
+# This module creates bidirectional VNet peering between VM and ODAA networks
 # across different Azure subscriptions.
 # ===============================================================================
 
@@ -10,20 +10,20 @@ terraform {
     azurerm = {
       source                = "hashicorp/azurerm"
       version               = "~> 4.0"
-      configuration_aliases = [azurerm.aks, azurerm.odaa]
+      configuration_aliases = [azurerm.vm, azurerm.odaa]
     }
   }
 }
 
 # ===============================================================================
-# VNet Peering: AKS to ODAA
+# VNet Peering: VM to ODAA
 # ===============================================================================
 
-resource "azurerm_virtual_network_peering" "aks_to_odaa" {
-  provider                  = azurerm.aks
-  name                      = var.peering_suffix != "" ? "peer-aks-to-odaa-${var.peering_suffix}" : "peer-aks-to-odaa"
-  resource_group_name       = var.aks_resource_group
-  virtual_network_name      = var.aks_vnet_name
+resource "azurerm_virtual_network_peering" "vm_to_odaa" {
+  provider                  = azurerm.vm
+  name                      = var.peering_suffix != "" ? "peer-vm-to-odaa-${var.peering_suffix}" : "peer-vm-to-odaa"
+  resource_group_name       = var.vm_resource_group
+  virtual_network_name      = var.vm_vnet_name
   remote_virtual_network_id = var.odaa_vnet_id
 
   # Peering settings
@@ -32,23 +32,21 @@ resource "azurerm_virtual_network_peering" "aks_to_odaa" {
   allow_gateway_transit        = false
   use_remote_gateways          = false
 
-  # Peering can be destroyed independently of subnets
-  # This prevents blocking subnet deletion
   lifecycle {
     create_before_destroy = false
   }
 }
 
 # ===============================================================================
-# VNet Peering: ODAA to AKS
+# VNet Peering: ODAA to VM
 # ===============================================================================
 
-resource "azurerm_virtual_network_peering" "odaa_to_aks" {
+resource "azurerm_virtual_network_peering" "odaa_to_vm" {
   provider                  = azurerm.odaa
-  name                      = var.peering_suffix != "" ? "peer-odaa-to-aks-${var.peering_suffix}" : "peer-odaa-to-aks"
+  name                      = var.peering_suffix != "" ? "peer-odaa-to-vm-${var.peering_suffix}" : "peer-odaa-to-vm"
   resource_group_name       = var.odaa_resource_group
   virtual_network_name      = var.odaa_vnet_name
-  remote_virtual_network_id = var.aks_vnet_id
+  remote_virtual_network_id = var.vm_vnet_id
 
   # Peering settings
   allow_virtual_network_access = true
@@ -56,8 +54,6 @@ resource "azurerm_virtual_network_peering" "odaa_to_aks" {
   allow_gateway_transit        = false
   use_remote_gateways          = false
 
-  # Peering can be destroyed independently of subnets
-  # This prevents blocking subnet deletion
   lifecycle {
     create_before_destroy = false
   }

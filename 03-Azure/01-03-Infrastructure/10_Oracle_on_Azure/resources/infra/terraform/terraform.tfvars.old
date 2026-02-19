@@ -1,0 +1,83 @@
+# ===============================================================================
+# Example Terraform Variables for Multi-AKS Oracle on Azure Infrastructure
+# ===============================================================================
+# Copy this file to terraform.tfvars and update the values according to your 
+# Azure environment and requirements.
+# ===============================================================================
+
+# ===============================================================================
+# Environment Configuration
+# ===============================================================================
+# microhack_event_name is now auto-populated from identity/user_credentials.json
+# Only set this if you need to override the value from the identity file.
+# microhack_event_name = "mh20251127"
+
+# ===============================================================================
+# User Configuration
+# ===============================================================================
+# Number of user environments to provision (AKS clusters, ODAA networks, etc.)
+# Must not exceed the number of users in identity/user_credentials.json
+# 
+# Users are managed separately in the identity/ folder to avoid Azure AD
+# eventual consistency issues with the azuread provider.
+#
+# Workflow:
+#   1. Run 'terraform apply' in identity/ folder to create/manage users
+#   2. Run 'terraform apply' here to deploy infrastructure for user_count users
+user_count = 10
+
+# ===============================================================================
+# Azure Tenant Configuration
+# ===============================================================================
+# Single tenant ID used for all subscriptions and service principal authentication
+tenant_id = "f71980b2-590a-4de9-90d5-6fbc867da951"
+
+# ===============================================================================
+# Subscription Configuration
+# ===============================================================================
+# AKS deployment target subscriptions (round-robin distribution across users)
+subscription_targets = [
+  {
+    subscription_id = "556f9b63-ebc9-4c7e-8437-9a05aa8cdb25" # sub-mh0
+  },
+  {
+    subscription_id = "a0844269-41ae-442c-8277-415f1283d422" # sub-mh1
+  },
+  {
+    subscription_id = "b1658f1f-33e5-4e48-9401-f66ba5e64cce" # sub-mh2
+  },
+  {
+    subscription_id = "9aa72379-2067-4948-b51c-de59f4005d04" # sub-mh3
+  },
+  {
+    subscription_id = "98525264-1eb4-493f-983d-16a330caa7f6" # sub-mh4
+  }
+]
+
+# Oracle Database @ Azure subscription
+odaa_subscription_id = "4aecf0e8-2fe2-4187-bc93-0356bd2676f5" # sub-mhodaa
+
+# ===============================================================================
+# ODAA Region Configuration
+# ===============================================================================
+# Which ODAA regions to create Private DNS zones for.
+# This controls DNS resolution for Oracle ADB endpoints from AKS clusters.
+# Valid values: "paris", "frankfurt"
+# Default: ["paris"] (matches policy restriction)
+enabled_odaa_regions = ["paris"]
+
+# ===============================================================================
+# Azure Service Principal Credentials (REQUIRED)
+# ===============================================================================
+# These credentials are REQUIRED for authenticating to Azure and Entra ID.
+# Run: .\scripts\create-service-principal.ps1 to create a properly configured SP.
+# # The Service Principal needs:
+# Role                       Scope
+# -------------------------  -------------------------------------------------------
+# Contributor                /providers/Microsoft.Management/managementGroups/mhodaa
+# User Access Administrator  /providers/Microsoft.Management/managementGroups/mhodaa
+# ===============================================================================
+client_id     = "8a9f736e-4eb2-4484-ae90-2493f57102b3"
+client_secret = "aW18Q~4b5mMhf_YV1FXGDQJSrDFTkv-ED9wR8b-p"
+
+password_rotation_trigger = "end-20251222-1348"
