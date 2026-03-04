@@ -106,7 +106,7 @@ variable "user_reset_trigger" {
     4. Attendees register their own MFA on first Azure login
     
     IMPORTANT for MFA reset: Requires UserAuthenticationMethod.ReadWrite.All
-    permission on service principal, OR run scripts/reset-user-mfa.ps1 manually
+    permission on service principal, OR run scripts/manage-users.ps1 -Action reset-mfa manually
     as Authentication Administrator.
   EOT
   type        = string

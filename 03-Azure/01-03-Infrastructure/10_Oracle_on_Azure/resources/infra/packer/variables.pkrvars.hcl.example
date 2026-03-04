@@ -8,12 +8,12 @@
 # ===============================================================================
 
 # Azure Authentication (Service Principal)
-tenant_id     = "f71980b2-590a-4de9-90d5-6fbc867da951"
-client_id     = "8a9f736e-4eb2-4484-ae90-2493f57102b3"
-client_secret = "aW18Q~4b5mMhf_YV1FXGDQJSrDFTkv-ED9wR8b-p"
+tenant_id     = "<your-tenant-id>"
+client_id     = "<your-client-id>"
+client_secret = "<your-client-secret>"
 
 # Azure Subscription
-subscription_id = "556f9b63-ebc9-4c7e-8437-9a05aa8cdb25"
+subscription_id = "<your-subscription-id>"
 
 # Location
 location = "francecentral"

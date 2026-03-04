@@ -115,7 +115,7 @@ resource "local_file" "user_credentials" {
 # allowing new workshop attendees to register their own MFA on first login.
 #
 # Required: UserAuthenticationMethod.ReadWrite.All permission on service principal
-# Alternative: Run scripts/reset-user-mfa.ps1 manually as Authentication Administrator
+# Alternative: Run scripts/manage-users.ps1 -Action reset-mfa manually as Authentication Administrator
 # ===============================================================================
 
 resource "null_resource" "mfa_reset" {
@@ -198,7 +198,7 @@ resource "null_resource" "mfa_reset" {
       
       if ($errorCount -gt 0) {
         Write-Host "`nNote: Permission errors are expected if service principal lacks" -ForegroundColor Yellow
-        Write-Host "UserAuthenticationMethod.ReadWrite.All. Run reset-user-mfa.ps1 manually." -ForegroundColor Yellow
+        Write-Host "UserAuthenticationMethod.ReadWrite.All. Run manage-users.ps1 -Action reset-mfa manually." -ForegroundColor Yellow
       }
     EOT
     interpreter = ["pwsh", "-Command"]

@@ -1,0 +1,626 @@
+---
+# ===============================================================================
+# Ansible Playbook - Oracle Workshop VM Complete Configuration
+# ===============================================================================
+# This playbook creates a fully configured Oracle Workshop VM with all tools
+# pre-installed for the Oracle Database@Azure MicroHack.
+#
+# Tools installed:
+# ├── Oracle Database Tools
+# │   ├── Oracle Instant Client 23.5 (Basic + SQL*Plus)
+# │   ├── Oracle SQLcl (SQL Developer Command Line)
+# │   ├── adbping (Oracle ADB latency testing)
+# │   └── rwloadsim/connping (Oracle connection testing)
+# ├── CLIs
+# │   ├── Azure CLI
+# │   └── OCI CLI (Oracle Cloud Infrastructure)
+# ├── Development
+# │   ├── Java 17 OpenJDK
+# │   ├── Python 3.12 + pip
+# │   └── Git
+# └── Utilities
+#     ├── Network tools (curl, wget, dig, traceroute, netcat)
+#     ├── jq, unzip, vim, nano
+#     └── Docker (optional)
+# ===============================================================================
+
+- name: Configure Oracle Workshop VM
+  hosts: localhost
+  connection: local
+  become: true
+
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    NEEDRESTART_MODE: "l"
+
+  vars:
+    # Oracle versions
+    oracle_instant_client_version: "23.5"
+    oracle_instant_client_full_version: "23.5.0.24.07"
+    sqlcl_version: "24.3"
+    rwloadsim_version: "3.2.1"
+    
+    # Java
+    java_version: "17"
+    
+    # Installation paths
+    oracle_base: "/opt/oracle"
+    instant_client_dir: "{{ oracle_base }}/instantclient"
+    sqlcl_dir: "{{ oracle_base }}/sqlcl"
+    adbping_dir: "{{ oracle_base }}/adbping"
+    rwloadsim_dir: "{{ oracle_base }}/rwloadsim"
+    wallet_dir: "{{ oracle_base }}/wallet"
+    tns_admin: "{{ oracle_base }}/network/admin"
+    
+    # Install Docker (set to false if not needed)
+    install_docker: false
+
+  tasks:
+    # =========================================================================
+    # Cloud-init (avoid race conditions during image build)
+    # =========================================================================
+
+    - name: Wait for cloud-init to complete
+      command: cloud-init status --wait
+      changed_when: false
+      register: cloudinit_status
+      retries: 30
+      delay: 10
+      until: cloudinit_status.rc == 0
+
+    - name: Show cloud-init status
+      debug:
+        msg: "cloud-init status: {{ cloudinit_status.stdout | default('') }}"
+
+    # =========================================================================
+    # System Updates and Base Packages
+    # =========================================================================
+
+    - name: Update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install base packages
+      apt:
+        name:
+          - curl
+          - wget
+          - unzip
+          - zip
+          - ca-certificates
+          - gnupg
+          - lsb-release
+          - apt-transport-https
+          - software-properties-common
+          - libaio1t64
+          - libaio-dev
+          - libnsl2
+          - vim
+          - nano
+          - jq
+          - git
+          - htop
+          - tree
+          - tmux
+        state: present
+
+    - name: Check for libaio runtime library
+      stat:
+        path: /usr/lib/x86_64-linux-gnu/libaio.so.1
+      register: libaio_so
+
+    - name: Ensure libaio runtime (libaio1)
+      apt:
+        name: libaio1
+        state: present
+      when: not libaio_so.stat.exists
+      ignore_errors: true
+      register: libaio1_install
+
+    - name: Ensure libaio runtime (libaio1t64)
+      apt:
+        name: libaio1t64
+        state: present
+      when: not libaio_so.stat.exists and (libaio1_install is failed)
+
+    - name: Check for libaio t64 runtime library
+      stat:
+        path: /usr/lib/x86_64-linux-gnu/libaio.so.1t64
+      register: libaio_so_t64
+
+    - name: Create libaio.so.1 compatibility symlink
+      file:
+        src: /usr/lib/x86_64-linux-gnu/libaio.so.1t64
+        dest: /usr/lib/x86_64-linux-gnu/libaio.so.1
+        state: link
+        force: true
+      when: (not libaio_so.stat.exists) and libaio_so_t64.stat.exists
+
+    - name: Run ldconfig (after libaio symlink)
+      command: ldconfig
+      changed_when: true
+      when: (not libaio_so.stat.exists) and libaio_so_t64.stat.exists
+
+    - name: Install network diagnostic tools
+      apt:
+        name:
+          - dnsutils       # dig, nslookup
+          - iputils-ping
+          - traceroute
+          - netcat-openbsd
+          - net-tools      # ifconfig, netstat
+          - tcpdump
+          - telnet
+        state: present
+
+    # =========================================================================
+    # Java JDK Installation
+    # =========================================================================
+
+    - name: Install OpenJDK {{ java_version }}
+      apt:
+        name: "openjdk-{{ java_version }}-jdk"
+        state: present
+
+    # =========================================================================
+    # Python / pip
+    # =========================================================================
+
+    - name: Install Python and pip
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+        state: present
+
+    # =========================================================================
+    # Oracle Directory Structure
+    # =========================================================================
+
+    - name: Create Oracle directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ oracle_base }}"
+        - "{{ instant_client_dir }}"
+        - "{{ sqlcl_dir }}"
+        - "{{ adbping_dir }}"
+        - "{{ rwloadsim_dir }}"
+        - "{{ wallet_dir }}"
+        - "{{ tns_admin }}"
+
+    # =========================================================================
+    # Oracle Instant Client Installation
+    # =========================================================================
+
+    - name: Download Oracle Instant Client Basic
+      get_url:
+        url: "https://download.oracle.com/otn_software/linux/instantclient/2350000/instantclient-basic-linux.x64-{{ oracle_instant_client_full_version }}.zip"
+        dest: "/tmp/instantclient-basic.zip"
+        mode: '0644'
+      register: ic_basic_download
+      retries: 3
+      delay: 5
+      until: ic_basic_download is succeeded
+
+    - name: Download Oracle Instant Client SQL*Plus
+      get_url:
+        url: "https://download.oracle.com/otn_software/linux/instantclient/2350000/instantclient-sqlplus-linux.x64-{{ oracle_instant_client_full_version }}.zip"
+        dest: "/tmp/instantclient-sqlplus.zip"
+        mode: '0644'
+      register: ic_sqlplus_download
+      retries: 3
+      delay: 5
+      until: ic_sqlplus_download is succeeded
+
+    - name: Extract Instant Client Basic
+      unarchive:
+        src: "/tmp/instantclient-basic.zip"
+        dest: "{{ oracle_base }}"
+        remote_src: true
+
+    - name: Extract Instant Client SQL*Plus
+      unarchive:
+        src: "/tmp/instantclient-sqlplus.zip"
+        dest: "{{ oracle_base }}"
+        remote_src: true
+
+    - name: Find extracted Instant Client directory
+      find:
+        paths: "{{ oracle_base }}"
+        patterns: "instantclient_*"
+        file_type: directory
+      register: ic_dir
+
+    - name: Create symlink for Instant Client
+      file:
+        src: "{{ ic_dir.files[0].path }}"
+        dest: "{{ instant_client_dir }}"
+        state: link
+        force: true
+      when: ic_dir.files | length > 0
+
+    - name: Create sqlplus symlink in /usr/local/bin
+      file:
+        src: "{{ instant_client_dir }}/sqlplus"
+        dest: "/usr/local/bin/sqlplus"
+        state: link
+        force: true
+
+    - name: Configure dynamic linker for Oracle Instant Client
+      copy:
+        dest: /etc/ld.so.conf.d/oracle-instantclient.conf
+        content: "{{ instant_client_dir }}\n"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Run ldconfig
+      command: ldconfig
+      changed_when: true
+
+    - name: Verify sqlplus exists
+      command: /usr/local/bin/sqlplus -V
+      changed_when: false
+
+    # =========================================================================
+    # Oracle SQLcl Installation
+    # =========================================================================
+
+    - name: Download Oracle SQLcl
+      get_url:
+        url: "https://download.oracle.com/otn_software/java/sqldeveloper/sqlcl-latest.zip"
+        dest: "/tmp/sqlcl.zip"
+        mode: '0644'
+      register: sqlcl_download
+      retries: 3
+      delay: 5
+      until: sqlcl_download is succeeded
+
+    - name: Extract SQLcl
+      unarchive:
+        src: "/tmp/sqlcl.zip"
+        dest: "{{ oracle_base }}"
+        remote_src: true
+
+    - name: Fix SQLcl permissions (zip extracts as 0640)
+      shell: |
+        chmod -R o+r {{ sqlcl_dir }}
+        find {{ sqlcl_dir }} -type d -exec chmod o+x {} \;
+
+    - name: Make SQLcl executable
+      file:
+        path: "{{ sqlcl_dir }}/bin/sql"
+        mode: '0755'
+      ignore_errors: true
+
+    - name: Create sql symlink in /usr/local/bin
+      file:
+        src: "{{ sqlcl_dir }}/bin/sql"
+        dest: "/usr/local/bin/sql"
+        state: link
+        force: true
+      ignore_errors: true
+
+    # =========================================================================
+    # rwloadsim / connping Installation
+    # =========================================================================
+
+    - name: Download rwloadsim
+      get_url:
+        url: "https://github.com/oracle/rwloadsim/releases/download/v.{{ rwloadsim_version }}/rwloadsim-linux-x86_64-bin-{{ rwloadsim_version }}.tgz"
+        dest: "/tmp/rwloadsim.tgz"
+        mode: '0644'
+      register: rwloadsim_download
+      retries: 3
+      delay: 5
+      until: rwloadsim_download is succeeded
+
+    - name: Extract rwloadsim
+      unarchive:
+        src: "/tmp/rwloadsim.tgz"
+        dest: "{{ rwloadsim_dir }}"
+        remote_src: true
+
+    - name: Create connping symlink
+      file:
+        src: "{{ rwloadsim_dir }}/bin/connping"
+        dest: "/usr/local/bin/connping"
+        state: link
+        force: true
+        follow: false
+
+    - name: Create ociping symlink
+      file:
+        src: "{{ rwloadsim_dir }}/bin/ociping"
+        dest: "/usr/local/bin/ociping"
+        state: link
+        force: true
+        follow: false
+
+    - name: Verify connping target exists
+      stat:
+        path: "{{ rwloadsim_dir }}/bin/connping"
+      register: connping_target
+      failed_when: not connping_target.stat.exists
+
+    - name: Verify connping symlink exists
+      stat:
+        path: /usr/local/bin/connping
+      register: connping_link
+      failed_when: not connping_link.stat.exists
+
+    # =========================================================================
+    # adbping Installation (requires manual upload of zip to VM)
+    # =========================================================================
+
+    - name: Create adbping placeholder script
+      copy:
+        content: |
+          #!/bin/bash
+          # adbping - Oracle ADB Latency Testing Tool
+          # 
+          # This tool requires manual installation from Oracle Support.
+          # Download: https://support.oracle.com/support/?kmContentId=2863450
+          #
+          # After downloading the zip file, extract it to {{ adbping_dir }}
+          # and this script will be replaced with the actual adbping binary.
+          #
+          echo "ERROR: adbping not installed yet."
+          echo ""
+          echo "To install adbping:"
+          echo "1. Download from Oracle Support (Doc ID 2863450.1)"
+          echo "2. Upload the zip to this VM"
+          echo "3. Extract to {{ adbping_dir }}"
+          echo "4. Run: sudo ln -sf {{ adbping_dir }}/adbping /usr/local/bin/adbping"
+          exit 1
+        dest: "/usr/local/bin/adbping"
+        mode: '0755'
+
+    # =========================================================================
+    # Azure CLI Installation
+    # =========================================================================
+
+    - name: Add Microsoft GPG key
+      apt_key:
+        url: https://packages.microsoft.com/keys/microsoft.asc
+        state: present
+
+    - name: Add Azure CLI repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ {{ ansible_distribution_release }} main"
+        state: present
+        filename: azure-cli
+
+    - name: Install Azure CLI
+      apt:
+        name: azure-cli
+        state: present
+        update_cache: true
+
+    # =========================================================================
+    # OCI CLI Installation (via pipx for PEP 668 compatibility)
+    # =========================================================================
+
+    - name: Install pipx
+      apt:
+        name: pipx
+        state: present
+
+    - name: Ensure pipx path for root
+      command: pipx ensurepath
+      changed_when: false
+      environment:
+        PIPX_HOME: /opt/pipx
+        PIPX_BIN_DIR: /usr/local/bin
+
+    - name: Install OCI CLI via pipx
+      command: pipx install oci-cli
+      environment:
+        PIPX_HOME: /opt/pipx
+        PIPX_BIN_DIR: /usr/local/bin
+      args:
+        creates: /usr/local/bin/oci
+
+    # =========================================================================
+    # Docker Installation (Optional)
+    # =========================================================================
+
+    - name: Install Docker
+      when: install_docker | bool
+      block:
+        - name: Add Docker GPG key
+          apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            state: present
+
+        - name: Add Docker repository
+          apt_repository:
+            repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+            state: present
+            filename: docker
+
+        - name: Install Docker
+          apt:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+            state: present
+            update_cache: true
+
+        - name: Add users to docker group
+          user:
+            name: "{{ item }}"
+            groups: docker
+            append: true
+          loop:
+            - azureuser
+          ignore_errors: true
+
+    # =========================================================================
+    # Environment Configuration
+    # =========================================================================
+
+    - name: Create Oracle environment profile
+      copy:
+        content: |
+          # ===============================================================================
+          # Oracle Environment Variables
+          # ===============================================================================
+          export ORACLE_BASE={{ oracle_base }}
+          export ORACLE_HOME={{ instant_client_dir }}
+          export TNS_ADMIN={{ tns_admin }}
+          export LD_LIBRARY_PATH={{ instant_client_dir }}:$LD_LIBRARY_PATH
+          export PATH={{ instant_client_dir }}:{{ sqlcl_dir }}/bin:{{ rwloadsim_dir }}/bin:/usr/local/bin:$PATH
+          
+          # Java
+          export JAVA_HOME=/usr/lib/jvm/java-{{ java_version }}-openjdk-amd64
+          export PATH=$JAVA_HOME/bin:$PATH
+          
+          # Wallet location (copy your wallet here)
+          export WALLET_DIR={{ wallet_dir }}
+        dest: /etc/profile.d/oracle-workshop.sh
+        mode: '0644'
+
+    - name: Create sample tnsnames.ora
+      copy:
+        content: |
+          # ===============================================================================
+          # TNS Names Configuration for Oracle Database@Azure
+          # ===============================================================================
+          # 
+          # HOW TO USE:
+          # 1. Download your ADB wallet from Azure Portal
+          # 2. Extract the wallet to: {{ wallet_dir }}/
+          # 3. Copy the tnsnames.ora from the wallet to this file
+          # 4. Or point TNS_ADMIN to your wallet directory:
+          #    export TNS_ADMIN={{ wallet_dir }}
+          #
+          # EXAMPLE CONNECTION (replace with your actual values):
+          # ===============================================================================
+          
+          # MYATP_HIGH = (description= 
+          #   (retry_count=20)(retry_delay=3)
+          #   (address=(protocol=tcps)(port=1522)(host=HOSTNAME.adb.eu-paris-1.oraclecloud.com))
+          #   (connect_data=(service_name=SERVICE_NAME_high.adb.oraclecloud.com))
+          #   (security=(ssl_server_dn_match=yes))
+          # )
+          
+        dest: "{{ tns_admin }}/tnsnames.ora"
+        mode: '0644'
+
+    - name: Create workshop README
+      copy:
+        content: |
+          ================================================================================
+           Oracle Workshop VM - Quick Reference
+          ================================================================================
+          
+          INSTALLED TOOLS:
+          ----------------
+          
+          1. Oracle SQL*Plus:       sqlplus user/pass@service
+          2. Oracle SQLcl:          sql user/pass@service
+          3. connping/ociping:      connping user/pass@service
+          4. adbping:               (requires manual install from Oracle Support)
+          
+          AZURE & OCI:
+          ------------
+          
+          - Azure CLI:              az login
+          - OCI CLI:                oci session authenticate
+          
+          DIRECTORIES:
+          ------------
+          
+          - Oracle Base:            {{ oracle_base }}
+          - Instant Client:         {{ instant_client_dir }}
+          - SQLcl:                  {{ sqlcl_dir }}
+          - rwloadsim:              {{ rwloadsim_dir }}
+          - TNS Admin:              {{ tns_admin }}
+          - Wallet (place here):    {{ wallet_dir }}
+          
+          QUICK START:
+          ------------
+          
+          1. Download your ADB wallet from Azure Portal
+          2. Upload and extract to: {{ wallet_dir }}/
+          3. Set TNS_ADMIN: export TNS_ADMIN={{ wallet_dir }}
+          4. Connect: sql admin@myatp_high
+          
+          ================================================================================
+        dest: "/etc/motd"
+        mode: '0644'
+
+    # =========================================================================
+    # Cleanup
+    # =========================================================================
+
+    - name: Clean up downloaded archives
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/instantclient-basic.zip
+        - /tmp/instantclient-sqlplus.zip
+        - /tmp/sqlcl.zip
+        - /tmp/rwloadsim.tgz
+
+    - name: Clean apt cache
+      apt:
+        autoclean: true
+        autoremove: true
+
+    # =========================================================================
+    # Verification (must run BEFORE generalization which kills SSH)
+    # =========================================================================
+
+    - name: Verify installations
+      block:
+        - name: Check Java
+          command: java -version
+          register: java_check
+          changed_when: false
+          ignore_errors: true
+
+        - name: Check SQL*Plus
+          command: "{{ instant_client_dir }}/sqlplus -V"
+          register: sqlplus_check
+          changed_when: false
+          ignore_errors: true
+
+        - name: Check SQLcl
+          command: "{{ sqlcl_dir }}/bin/sql -version"
+          register: sqlcl_check
+          changed_when: false
+          ignore_errors: true
+
+        - name: Check Azure CLI
+          command: az version
+          register: az_check
+          changed_when: false
+          ignore_errors: true
+
+        - name: Check OCI CLI
+          command: oci --version
+          register: oci_check
+          changed_when: false
+          ignore_errors: true
+
+    - name: Display installation summary
+      debug:
+        msg: |
+          ================================================================================
+          INSTALLATION SUMMARY
+          ================================================================================
+          Java:      {{ 'OK' if java_check is succeeded else 'FAILED' }}
+          SQL*Plus:  {{ 'OK' if sqlplus_check is succeeded else 'FAILED' }}
+          SQLcl:     {{ 'OK' if sqlcl_check is succeeded else 'FAILED' }}
+          Azure CLI: {{ 'OK' if az_check is succeeded else 'FAILED' }}
+          OCI CLI:   {{ 'OK' if oci_check is succeeded else 'FAILED' }}
+          ================================================================================

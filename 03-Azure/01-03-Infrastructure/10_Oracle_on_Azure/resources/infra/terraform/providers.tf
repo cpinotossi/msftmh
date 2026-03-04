@@ -1,9 +1,11 @@
 # ===============================================================================
-# Provider Configuration - Simplified (2 Subscriptions)
+# Provider Configuration - 2 Subscriptions (Direct Peering)
 # ===============================================================================
 # This file configures Azure providers for the Oracle on Azure infrastructure:
 # - azurerm.vm:   VM Subscription (Workshop VMs, Compute Gallery)
 # - azurerm.odaa: ODAA Subscription (Oracle Database@Azure)
+#
+# Each user's VM VNet peers directly with their ODAA VNet (no hub).
 # ===============================================================================
 
 # ===============================================================================
@@ -36,6 +38,25 @@ provider "azurerm" {
 provider "azurerm" {
   alias           = "odaa"
   subscription_id = var.odaa_subscription_id
+  tenant_id       = var.tenant_id
+  client_id       = var.client_id
+  client_secret   = var.client_secret
+
+  features {
+    resource_group {
+      prevent_deletion_if_contains_resources = false
+    }
+  }
+}
+
+# ===============================================================================
+# TEMPORARY: Hub Provider (for destroying orphaned hub resources in state)
+# Remove this block after hub resources are destroyed!
+# ===============================================================================
+
+provider "azurerm" {
+  alias           = "hub"
+  subscription_id = var.vm_subscription_id
   tenant_id       = var.tenant_id
   client_id       = var.client_id
   client_secret   = var.client_secret

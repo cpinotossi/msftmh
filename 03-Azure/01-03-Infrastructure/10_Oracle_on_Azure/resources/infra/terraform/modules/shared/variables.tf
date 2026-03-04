@@ -25,12 +25,6 @@ variable "image_name" {
   default     = "oracle-workshop-vm"
 }
 
-variable "odaa_dns_zone_name" {
-  description = "Private DNS zone name for Oracle ODAA"
-  type        = string
-  default     = "adb.eu-paris-1.oraclecloud.com"
-}
-
 variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)

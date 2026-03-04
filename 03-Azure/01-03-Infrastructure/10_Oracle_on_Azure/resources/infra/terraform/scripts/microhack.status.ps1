@@ -12,7 +12,7 @@
 
 # Subscription targets from terraform.tfvars
 $subscriptionTargets = @(
-    @{ Id = "556f9b63-ebc9-4c7e-8437-9a05aa8cdb25"; Name = "sub-mh0" },
+    @{ Id = "09808f31-065f-4231-914d-776c2d6bbe34"; Name = "sub-mh0" },
     @{ Id = "a0844269-41ae-442c-8277-415f1283d422"; Name = "sub-mh1" },
     @{ Id = "b1658f1f-33e5-4e48-9401-f66ba5e64cce"; Name = "sub-mh2" },
     @{ Id = "9aa72379-2067-4948-b51c-de59f4005d04"; Name = "sub-mh3" },

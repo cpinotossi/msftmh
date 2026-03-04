@@ -1,0 +1,353 @@
+module.user_odaa_01.azurerm_resource_group.odaa: Refreshing state... [id=/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/rg-odaa-user01]
+module.user_odaa_00.azurerm_resource_group.odaa: Refreshing state... [id=/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/rg-odaa-user00]
+module.shared.azurerm_resource_group.shared: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-shared-workshop]
+module.user_vm_01.azurerm_resource_group.vm: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user01]
+module.user_vm_00.azurerm_resource_group.vm: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user00]
+module.user_odaa_01.azurerm_virtual_network.odaa: Refreshing state... [id=/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/rg-odaa-user01/providers/Microsoft.Network/virtualNetworks/vnet-odaa-user01]
+module.user_odaa_00.azurerm_virtual_network.odaa: Refreshing state... [id=/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/rg-odaa-user00/providers/Microsoft.Network/virtualNetworks/vnet-odaa-user00]
+module.user_vm_01.azurerm_public_ip.vm[0]: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user01/providers/Microsoft.Network/publicIPAddresses/pip-vm-user01]
+module.user_vm_01.azurerm_virtual_network.vm: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user01/providers/Microsoft.Network/virtualNetworks/vnet-vm-user01]
+module.user_vm_01.azurerm_private_dns_zone.odaa[0]: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user01/providers/Microsoft.Network/privateDnsZones/adb.eu-paris-1.oraclecloud.com]
+module.user_vm_01.azurerm_network_security_group.vm: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user01/providers/Microsoft.Network/networkSecurityGroups/nsg-vm-user01]
+module.user_odaa_01.azurerm_subnet.odaa: Refreshing state... [id=/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/rg-odaa-user01/providers/Microsoft.Network/virtualNetworks/vnet-odaa-user01/subnets/snet-odaa-user01]
+module.shared.azurerm_shared_image_gallery.gallery: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-shared-workshop/providers/Microsoft.Compute/galleries/gal_oracle_workshop]
+module.user_odaa_00.azurerm_subnet.odaa: Refreshing state... [id=/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/rg-odaa-user00/providers/Microsoft.Network/virtualNetworks/vnet-odaa-user00/subnets/snet-odaa-user00]
+module.user_vm_00.azurerm_network_security_group.vm: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user00/providers/Microsoft.Network/networkSecurityGroups/nsg-vm-user00]
+module.user_vm_00.azurerm_private_dns_zone.odaa[0]: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user00/providers/Microsoft.Network/privateDnsZones/adb.eu-paris-1.oraclecloud.com]
+module.user_vm_00.azurerm_virtual_network.vm: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user00/providers/Microsoft.Network/virtualNetworks/vnet-vm-user00]
+module.user_vm_00.azurerm_public_ip.vm[0]: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user00/providers/Microsoft.Network/publicIPAddresses/pip-vm-user00]
+module.user_odaa_01.azurerm_oracle_autonomous_database.adb[0]: Refreshing state... [id=/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/rg-odaa-user01/providers/Oracle.Database/autonomousDatabases/adbodaauser01]
+module.user_vm_01.azurerm_subnet.vm: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user01/providers/Microsoft.Network/virtualNetworks/vnet-vm-user01/subnets/snet-vm-user01]
+module.peering_01.azurerm_virtual_network_peering.vm_to_odaa: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user01/providers/Microsoft.Network/virtualNetworks/vnet-vm-user01/virtualNetworkPeerings/peer-vm-to-odaa-user01]
+module.peering_01.azurerm_virtual_network_peering.odaa_to_vm: Refreshing state... [id=/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/rg-odaa-user01/providers/Microsoft.Network/virtualNetworks/vnet-odaa-user01/virtualNetworkPeerings/peer-odaa-to-vm-user01]
+module.user_vm_01.azurerm_subnet_network_security_group_association.vm: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user01/providers/Microsoft.Network/virtualNetworks/vnet-vm-user01/subnets/snet-vm-user01]
+module.user_vm_01.azurerm_network_interface.vm: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user01/providers/Microsoft.Network/networkInterfaces/nic-vm-user01]
+module.shared.azurerm_shared_image.oracle_workshop: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-shared-workshop/providers/Microsoft.Compute/galleries/gal_oracle_workshop/images/oracle-workshop-vm]
+module.user_vm_00.azurerm_subnet.vm: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user00/providers/Microsoft.Network/virtualNetworks/vnet-vm-user00/subnets/snet-vm-user00]
+module.user_vm_00.azurerm_private_dns_zone_virtual_network_link.odaa[0]: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user00/providers/Microsoft.Network/privateDnsZones/adb.eu-paris-1.oraclecloud.com/virtualNetworkLinks/link-user00]
+module.peering_00.azurerm_virtual_network_peering.odaa_to_vm: Refreshing state... [id=/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/rg-odaa-user00/providers/Microsoft.Network/virtualNetworks/vnet-odaa-user00/virtualNetworkPeerings/peer-odaa-to-vm-user00]
+module.peering_00.azurerm_virtual_network_peering.vm_to_odaa: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user00/providers/Microsoft.Network/virtualNetworks/vnet-vm-user00/virtualNetworkPeerings/peer-vm-to-odaa-user00]
+module.user_vm_01.azurerm_private_dns_zone_virtual_network_link.odaa[0]: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user01/providers/Microsoft.Network/privateDnsZones/adb.eu-paris-1.oraclecloud.com/virtualNetworkLinks/link-user01]
+module.user_vm_00.azurerm_subnet_network_security_group_association.vm: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user00/providers/Microsoft.Network/virtualNetworks/vnet-vm-user00/subnets/snet-vm-user00]
+module.user_vm_00.azurerm_network_interface.vm: Refreshing state... [id=/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user00/providers/Microsoft.Network/networkInterfaces/nic-vm-user00]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+  ~ update in-place
+ <= read (data resources)
+
+Terraform will perform the following actions:
+
+  # module.shared.azurerm_shared_image.oracle_workshop will be updated in-place
+  ~ resource "azurerm_shared_image" "oracle_workshop" {
+        id                                  = "/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-shared-workshop/providers/Microsoft.Compute/galleries/gal_oracle_workshop/images/oracle-workshop-vm"
+        name                                = "oracle-workshop-vm"
+      ~ tags                                = {
+          + "Environment" = "Workshop"
+          + "ManagedBy"   = "Terraform"
+          + "Project"     = "OracleWorkshop"
+        }
+        # (23 unchanged attributes hidden)
+
+        # (1 unchanged block hidden)
+    }
+
+  # module.shared.azurerm_shared_image_gallery.gallery will be updated in-place
+  ~ resource "azurerm_shared_image_gallery" "gallery" {
+      + description         = "Shared image gallery for Oracle Workshop VMs"
+        id                  = "/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-shared-workshop/providers/Microsoft.Compute/galleries/gal_oracle_workshop"
+        name                = "gal_oracle_workshop"
+      ~ tags                = {
+          + "Environment" = "Workshop"
+          + "ManagedBy"   = "Terraform"
+          + "Project"     = "OracleWorkshop"
+        }
+        # (3 unchanged attributes hidden)
+    }
+
+  # module.user_odaa_00.data.azurerm_oracle_db_servers.basedb[0] will be read during apply
+  # (depends on a resource or a module with changes pending)
+ <= data "azurerm_oracle_db_servers" "basedb" {
+      + cloud_exadata_infrastructure_name = "exa-odaa-user00"
+      + db_servers                        = (known after apply)
+      + id                                = (known after apply)
+      + resource_group_name               = "rg-odaa-user00"
+    }
+
+  # module.user_odaa_00.azurerm_oracle_cloud_vm_cluster.basedb[0] will be created
+  + resource "azurerm_oracle_cloud_vm_cluster" "basedb" {
+      + cloud_exadata_infrastructure_id = (known after apply)
+      + cluster_name                    = (known after apply)
+      + cpu_core_count                  = 4
+      + data_storage_percentage         = (known after apply)
+      + data_storage_size_in_tbs        = 2
+      + db_node_storage_size_in_gbs     = 120
+      + db_servers                      = (known after apply)
+      + display_name                    = "vmcl-odaa-user00"
+      + domain                          = (known after apply)
+      + gi_version                      = "19.0.0.0"
+      + hostname                        = "vm00"
+      + hostname_actual                 = (known after apply)
+      + id                              = (known after apply)
+      + license_model                   = "BringYourOwnLicense"
+      + local_backup_enabled            = (known after apply)
+      + location                        = "francecentral"
+      + memory_size_in_gbs              = 60
+      + name                            = "vmcl-odaa-user00"
+      + ocid                            = (known after apply)
+      + resource_group_name             = "rg-odaa-user00"
+      + scan_listener_port_tcp          = 1521
+      + scan_listener_port_tcp_ssl      = 2484
+      + sparse_diskgroup_enabled        = (known after apply)
+      + ssh_public_keys                 = [
+          + "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDTskh6+W2a8j4rZFcysn4wgeCW1LycbPep97O+yF0awkOftlBmbjAkTphIX0vimhoq9B0CWXOi7K9vDSDxexUV6lMlFYUnMc9yOWycXbw57Dq7HmJBUMDiPqSFBxOCg+WzSE77YvibEK2Lj1BFr5DZz1gCAtS+glXWNxU1C3Qfix1h8D1K9RBXdrixvLj21oCp7hxnnmdTQ7NynAcx/vhJnTQAicX/8szQN5PNp1K/5wS/Qd9qHLzgDqxCjVCQtKReE5Jq/VwpY13/s4S39EUlPEomgoo3458cFmEkN9IORLL1z6UrQ2MY1FMujjocVUYy4oJ41aj7vBtSYw+16M8Z",
+        ]
+      + subnet_id                       = "/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/rg-odaa-user00/providers/Microsoft.Network/virtualNetworks/vnet-odaa-user00/subnets/snet-odaa-user00"
+      + system_version                  = (known after apply)
+      + tags                            = {
+          + "Environment" = "Workshop"
+          + "ManagedBy"   = "Terraform"
+          + "Project"     = "OracleWorkshop"
+          + "UserIndex"   = "0"
+        }
+      + time_zone                       = (known after apply)
+      + virtual_network_id              = "/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/rg-odaa-user00/providers/Microsoft.Network/virtualNetworks/vnet-odaa-user00"
+      + zone_id                         = (known after apply)
+
+      + data_collection_options (known after apply)
+    }
+
+  # module.user_odaa_00.azurerm_oracle_exadata_infrastructure.basedb[0] will be created
+  + resource "azurerm_oracle_exadata_infrastructure" "basedb" {
+      + compute_count        = 2
+      + customer_contacts    = (known after apply)
+      + database_server_type = (known after apply)
+      + display_name         = "exa-odaa-user00"
+      + id                   = (known after apply)
+      + location             = "francecentral"
+      + name                 = "exa-odaa-user00"
+      + resource_group_name  = "rg-odaa-user00"
+      + shape                = "ExaDbXS"
+      + storage_count        = 3
+      + storage_server_type  = (known after apply)
+      + tags                 = {
+          + "Environment" = "Workshop"
+          + "ManagedBy"   = "Terraform"
+          + "Project"     = "OracleWorkshop"
+          + "UserIndex"   = "0"
+        }
+      + zones                = [
+          + "1",
+        ]
+
+      + maintenance_window (known after apply)
+    }
+
+  # module.user_vm_00.azurerm_linux_virtual_machine.vm will be created
+  + resource "azurerm_linux_virtual_machine" "vm" {
+      + admin_username                                         = "azureuser"
+      + allow_extension_operations                             = (known after apply)
+      + bypass_platform_safety_checks_on_user_schedule_enabled = false
+      + computer_name                                          = (known after apply)
+      + disable_password_authentication                        = (known after apply)
+      + disk_controller_type                                   = (known after apply)
+      + extensions_time_budget                                 = "PT1H30M"
+      + id                                                     = (known after apply)
+      + location                                               = "francecentral"
+      + max_bid_price                                          = -1
+      + name                                                   = "vm-user00"
+      + network_interface_ids                                  = [
+          + "/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user00/providers/Microsoft.Network/networkInterfaces/nic-vm-user00",
+        ]
+      + os_managed_disk_id                                     = (known after apply)
+      + patch_assessment_mode                                  = (known after apply)
+      + patch_mode                                             = (known after apply)
+      + platform_fault_domain                                  = -1
+      + priority                                               = "Regular"
+      + private_ip_address                                     = (known after apply)
+      + private_ip_addresses                                   = (known after apply)
+      + provision_vm_agent                                     = (known after apply)
+      + public_ip_address                                      = (known after apply)
+      + public_ip_addresses                                    = (known after apply)
+      + resource_group_name                                    = "rg-vm-user00"
+      + size                                                   = "Standard_D2s_v5"
+      + source_image_id                                        = "/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-shared-workshop/providers/Microsoft.Compute/galleries/gal_oracle_workshop/images/oracle-workshop-vm/versions/1.0.1"
+      + tags                                                   = {
+          + "Environment" = "Workshop"
+          + "ManagedBy"   = "Terraform"
+          + "Project"     = "OracleWorkshop"
+          + "UserIndex"   = "0"
+        }
+      + virtual_machine_id                                     = (known after apply)
+      + vm_agent_platform_updates_enabled                      = (known after apply)
+
+      + admin_ssh_key {
+          + public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDTskh6+W2a8j4rZFcysn4wgeCW1LycbPep97O+yF0awkOftlBmbjAkTphIX0vimhoq9B0CWXOi7K9vDSDxexUV6lMlFYUnMc9yOWycXbw57Dq7HmJBUMDiPqSFBxOCg+WzSE77YvibEK2Lj1BFr5DZz1gCAtS+glXWNxU1C3Qfix1h8D1K9RBXdrixvLj21oCp7hxnnmdTQ7NynAcx/vhJnTQAicX/8szQN5PNp1K/5wS/Qd9qHLzgDqxCjVCQtKReE5Jq/VwpY13/s4S39EUlPEomgoo3458cFmEkN9IORLL1z6UrQ2MY1FMujjocVUYy4oJ41aj7vBtSYw+16M8Z"
+          + username   = "azureuser"
+        }
+
+      + identity {
+          + principal_id = (known after apply)
+          + tenant_id    = (known after apply)
+          + type         = "SystemAssigned"
+        }
+
+      + os_disk {
+          + caching                   = "ReadWrite"
+          + disk_size_gb              = 128
+          + id                        = (known after apply)
+          + name                      = (known after apply)
+          + storage_account_type      = "Standard_LRS"
+          + write_accelerator_enabled = false
+        }
+
+      + termination_notification (known after apply)
+    }
+
+  # module.user_vm_00.azurerm_role_assignment.vm_user_login[0] will be created
+  + resource "azurerm_role_assignment" "vm_user_login" {
+      + condition_version                = (known after apply)
+      + description                      = "Allows Entra ID user to login to VM vm-user00"
+      + id                               = (known after apply)
+      + name                             = (known after apply)
+      + principal_id                     = "1b72fd4f-eb1b-4cb9-a4fd-6c05eec0879b"
+      + principal_type                   = (known after apply)
+      + role_definition_id               = (known after apply)
+      + role_definition_name             = "Virtual Machine User Login"
+      + scope                            = (known after apply)
+      + skip_service_principal_aad_check = (known after apply)
+    }
+
+  # module.user_vm_00.azurerm_virtual_machine_extension.aad_login[0] will be created
+  + resource "azurerm_virtual_machine_extension" "aad_login" {
+      + auto_upgrade_minor_version  = true
+      + failure_suppression_enabled = false
+      + id                          = (known after apply)
+      + name                        = "AADSSHLoginForLinux"
+      + publisher                   = "Microsoft.Azure.ActiveDirectory"
+      + tags                        = {
+          + "Environment" = "Workshop"
+          + "ManagedBy"   = "Terraform"
+          + "Project"     = "OracleWorkshop"
+        }
+      + type                        = "AADSSHLoginForLinux"
+      + type_handler_version        = "1.0"
+      + virtual_machine_id          = (known after apply)
+    }
+
+  # module.user_vm_01.azurerm_linux_virtual_machine.vm will be created
+  + resource "azurerm_linux_virtual_machine" "vm" {
+      + admin_username                                         = "azureuser"
+      + allow_extension_operations                             = (known after apply)
+      + bypass_platform_safety_checks_on_user_schedule_enabled = false
+      + computer_name                                          = (known after apply)
+      + disable_password_authentication                        = (known after apply)
+      + disk_controller_type                                   = (known after apply)
+      + extensions_time_budget                                 = "PT1H30M"
+      + id                                                     = (known after apply)
+      + location                                               = "francecentral"
+      + max_bid_price                                          = -1
+      + name                                                   = "vm-user01"
+      + network_interface_ids                                  = [
+          + "/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-vm-user01/providers/Microsoft.Network/networkInterfaces/nic-vm-user01",
+        ]
+      + os_managed_disk_id                                     = (known after apply)
+      + patch_assessment_mode                                  = (known after apply)
+      + patch_mode                                             = (known after apply)
+      + platform_fault_domain                                  = -1
+      + priority                                               = "Regular"
+      + private_ip_address                                     = (known after apply)
+      + private_ip_addresses                                   = (known after apply)
+      + provision_vm_agent                                     = (known after apply)
+      + public_ip_address                                      = (known after apply)
+      + public_ip_addresses                                    = (known after apply)
+      + resource_group_name                                    = "rg-vm-user01"
+      + size                                                   = "Standard_D2s_v5"
+      + source_image_id                                        = "/subscriptions/09808f31-065f-4231-914d-776c2d6bbe34/resourceGroups/rg-shared-workshop/providers/Microsoft.Compute/galleries/gal_oracle_workshop/images/oracle-workshop-vm/versions/1.0.1"
+      + tags                                                   = {
+          + "Environment" = "Workshop"
+          + "ManagedBy"   = "Terraform"
+          + "Project"     = "OracleWorkshop"
+          + "UserIndex"   = "1"
+        }
+      + virtual_machine_id                                     = (known after apply)
+      + vm_agent_platform_updates_enabled                      = (known after apply)
+
+      + admin_ssh_key {
+          + public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDTskh6+W2a8j4rZFcysn4wgeCW1LycbPep97O+yF0awkOftlBmbjAkTphIX0vimhoq9B0CWXOi7K9vDSDxexUV6lMlFYUnMc9yOWycXbw57Dq7HmJBUMDiPqSFBxOCg+WzSE77YvibEK2Lj1BFr5DZz1gCAtS+glXWNxU1C3Qfix1h8D1K9RBXdrixvLj21oCp7hxnnmdTQ7NynAcx/vhJnTQAicX/8szQN5PNp1K/5wS/Qd9qHLzgDqxCjVCQtKReE5Jq/VwpY13/s4S39EUlPEomgoo3458cFmEkN9IORLL1z6UrQ2MY1FMujjocVUYy4oJ41aj7vBtSYw+16M8Z"
+          + username   = "azureuser"
+        }
+
+      + identity {
+          + principal_id = (known after apply)
+          + tenant_id    = (known after apply)
+          + type         = "SystemAssigned"
+        }
+
+      + os_disk {
+          + caching                   = "ReadWrite"
+          + disk_size_gb              = 128
+          + id                        = (known after apply)
+          + name                      = (known after apply)
+          + storage_account_type      = "Standard_LRS"
+          + write_accelerator_enabled = false
+        }
+
+      + termination_notification (known after apply)
+    }
+
+  # module.user_vm_01.azurerm_role_assignment.vm_user_login[0] will be created
+  + resource "azurerm_role_assignment" "vm_user_login" {
+      + condition_version                = (known after apply)
+      + description                      = "Allows Entra ID user to login to VM vm-user01"
+      + id                               = (known after apply)
+      + name                             = (known after apply)
+      + principal_id                     = "e0178e03-3be3-4bbf-ae14-fcc798214808"
+      + principal_type                   = (known after apply)
+      + role_definition_id               = (known after apply)
+      + role_definition_name             = "Virtual Machine User Login"
+      + scope                            = (known after apply)
+      + skip_service_principal_aad_check = (known after apply)
+    }
+
+  # module.user_vm_01.azurerm_virtual_machine_extension.aad_login[0] will be created
+  + resource "azurerm_virtual_machine_extension" "aad_login" {
+      + auto_upgrade_minor_version  = true
+      + failure_suppression_enabled = false
+      + id                          = (known after apply)
+      + name                        = "AADSSHLoginForLinux"
+      + publisher                   = "Microsoft.Azure.ActiveDirectory"
+      + tags                        = {
+          + "Environment" = "Workshop"
+          + "ManagedBy"   = "Terraform"
+          + "Project"     = "OracleWorkshop"
+        }
+      + type                        = "AADSSHLoginForLinux"
+      + type_handler_version        = "1.0"
+      + virtual_machine_id          = (known after apply)
+    }
+
+Plan: 8 to add, 2 to change, 0 to destroy.
+
+Changes to Outputs:
+  ~ user_00_odaa_info  = {
+      + cloud_vm_cluster_id       = (known after apply)
+      + exadata_infrastructure_id = (known after apply)
+        # (5 unchanged attributes hidden)
+    }
+  ~ user_00_vm_info    = {
+      + vm_id          = (known after apply)
+      ~ vm_name        = null -> "vm-user00"
+        # (4 unchanged attributes hidden)
+    }
+  ~ user_01_vm_info    = {
+      + vm_id          = (known after apply)
+      ~ vm_name        = null -> "vm-user01"
+        # (4 unchanged attributes hidden)
+    }
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.

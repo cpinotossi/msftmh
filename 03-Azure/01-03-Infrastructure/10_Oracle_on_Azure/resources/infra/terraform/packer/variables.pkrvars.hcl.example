@@ -1,0 +1,30 @@
+# ===============================================================================
+# Packer Variables - Oracle Workshop Image
+# ===============================================================================
+# Copy this file to variables.auto.pkrvars.hcl and fill in your values
+# ===============================================================================
+
+# Azure Authentication (from Service Principal)
+client_id       = "YOUR_CLIENT_ID"
+client_secret   = "YOUR_CLIENT_SECRET"
+tenant_id       = "YOUR_TENANT_ID"
+subscription_id = "YOUR_SUBSCRIPTION_ID"
+
+# Location - should match your Compute Gallery location
+location = "francecentral"
+
+# Resource Group containing the Compute Gallery
+resource_group = "rg-shared-workshop"
+
+# Separate Resource Group used for temporary Packer build resources (pkr*)
+build_resource_group = "rg-packer-build"
+
+# Azure Compute Gallery settings
+gallery_name = "gal_oracle_workshop"
+image_name   = "oracle-workshop-vm"
+
+# Image version (increment for each new build)
+image_version = "1.0.0"
+
+# VM size for building (D2s_v5 is sufficient, use larger for faster builds)
+vm_size = "Standard_D2s_v5"

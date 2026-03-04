@@ -31,13 +31,3 @@ output "image_name" {
   description = "Name of the image definition"
   value       = azurerm_shared_image.oracle_workshop.name
 }
-
-output "dns_zone_id" {
-  description = "ID of the Private DNS Zone for ODAA"
-  value       = azurerm_private_dns_zone.odaa_paris.id
-}
-
-output "dns_zone_name" {
-  description = "Name of the Private DNS Zone for ODAA"
-  value       = azurerm_private_dns_zone.odaa_paris.name
-}

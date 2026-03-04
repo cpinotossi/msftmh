@@ -29,8 +29,8 @@ locals {
   user_configs = {
     for key, user in var.users :
     key => {
-      identifier    = lower(user.identifier)
-      index         = tonumber(key)  # Convert string key to number
+      identifier = lower(user.identifier)
+      index      = tonumber(key) # Convert string key to number
       catalog_entry = (
         tonumber(key) < length(local.user_catalog_entries) ?
         local.user_catalog_entries[tonumber(key)] :
@@ -180,7 +180,7 @@ resource "null_resource" "update_passwords" {
   provisioner "local-exec" {
     command     = "az ad user update --id '${each.value.user_principal_name}' --password '${random_password.aks_deployment_users[each.key].result}' --force-change-password-next-sign-in true"
     interpreter = ["pwsh", "-Command"]
-    on_failure  = continue  # Don't fail if user doesn't exist yet (first run)
+    on_failure  = continue # Don't fail if user doesn't exist yet (first run)
   }
 
   depends_on = [

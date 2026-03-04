@@ -63,6 +63,12 @@ variable "create_public_ip" {
   default     = true
 }
 
+variable "create_dns_link" {
+  description = "Create a Private DNS Zone link (must be known at plan time)"
+  type        = bool
+  default     = true
+}
+
 variable "dns_zone_id" {
   description = "ID of the Private DNS Zone for ODAA (optional)"
   type        = string
@@ -72,7 +78,7 @@ variable "dns_zone_id" {
 variable "dns_zone_name" {
   description = "Name of the Private DNS Zone for ODAA"
   type        = string
-  default     = null
+  default     = "adb.eu-paris-1.oraclecloud.com"
 }
 
 variable "dns_zone_resource_group" {

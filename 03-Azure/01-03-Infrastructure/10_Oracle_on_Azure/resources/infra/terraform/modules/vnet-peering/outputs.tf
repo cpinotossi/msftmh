@@ -29,5 +29,3 @@ output "odaa_vnet_info" {
     resource_group = var.odaa_resource_group
   }
 }
-  }
-}

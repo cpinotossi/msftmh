@@ -23,7 +23,7 @@ param (
     [string[]]
     $Subscriptions = @(
         "4aecf0e8-2fe2-4187-bc93-0356bd2676f5", # sub-mhodaa
-        "556f9b63-ebc9-4c7e-8437-9a05aa8cdb25", # sub-t0
+        "09808f31-065f-4231-914d-776c2d6bbe34", # sub-t0
         "a0844269-41ae-442c-8277-415f1283d422", # sub-t1
         "b1658f1f-33e5-4e48-9401-f66ba5e64cce", # sub-t2
         "9aa72379-2067-4948-b51c-de59f4005d04", # sub-t3

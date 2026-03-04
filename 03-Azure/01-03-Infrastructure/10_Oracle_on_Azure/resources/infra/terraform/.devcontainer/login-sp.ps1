@@ -1,41 +1,55 @@
 #!/usr/bin/env pwsh
 # Login script for Azure Service Principal
+# Single source of truth: terraform.tfvars
 
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "Logging in Azure CLI as Service Principal" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 
-# Source .env file if environment variables not already set
-if (-not $env:ARM_CLIENT_ID) {
-    $envFile = Join-Path $PSScriptRoot ".env"
-    if (Test-Path $envFile) {
-        Write-Host "Loading credentials from .devcontainer/.env..."
-        Get-Content $envFile | ForEach-Object {
-            if ($_ -match '^export\s+(\w+)="?([^"]*)"?$') {
-                [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], "Process")
-            }
-            elseif ($_ -match '^(\w+)="?([^"]*)"?$') {
-                [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], "Process")
-            }
+# Parse terraform.tfvars (single source of truth)
+$tfvarsPath = Join-Path $PSScriptRoot ".." "terraform.tfvars"
+if (-not (Test-Path $tfvarsPath)) {
+    Write-Host "ERROR: terraform.tfvars not found at $tfvarsPath" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Loading credentials from terraform.tfvars..."
+$tfvars = @{}
+Get-Content $tfvarsPath | ForEach-Object {
+    $line = $_.Trim()
+    if ($line -and -not $line.StartsWith('#') -and -not $line.StartsWith('//')) {
+        # Strip inline comments
+        $line = ($line -split '\s+#', 2)[0].Trim()
+        if ($line -match '^([A-Za-z0-9_]+)\s*=\s*"([^"]*)"') {
+            $tfvars[$Matches[1]] = $Matches[2]
         }
     }
 }
 
-if (-not $env:ARM_CLIENT_ID -or -not $env:ARM_CLIENT_SECRET -or -not $env:ARM_TENANT_ID) {
-    Write-Host "ERROR: Missing required environment variables!" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "Create .devcontainer/.env from .devcontainer/.env.example:"
-    Write-Host "  cp .devcontainer/.env.example .devcontainer/.env"
-    Write-Host "  # Edit .env with your SP credentials"
-    Write-Host "  # Then rebuild the container"
+$clientId     = $tfvars['client_id']
+$clientSecret = $tfvars['client_secret']
+$tenantId     = $tfvars['tenant_id']
+$subscriptionId = $tfvars['vm_subscription_id']
+
+if (-not $clientId -or -not $clientSecret -or -not $tenantId) {
+    Write-Host "ERROR: Missing required fields in terraform.tfvars!" -ForegroundColor Red
+    Write-Host "  Required: client_id, client_secret, tenant_id" -ForegroundColor Yellow
     exit 1
+}
+
+# Set ARM_* env vars for Terraform provider
+[Environment]::SetEnvironmentVariable("ARM_CLIENT_ID", $clientId, "Process")
+[Environment]::SetEnvironmentVariable("ARM_CLIENT_SECRET", $clientSecret, "Process")
+[Environment]::SetEnvironmentVariable("ARM_TENANT_ID", $tenantId, "Process")
+if ($subscriptionId) {
+    [Environment]::SetEnvironmentVariable("ARM_SUBSCRIPTION_ID", $subscriptionId, "Process")
 }
 
 # Login as service principal
 az login --service-principal `
-    --username $env:ARM_CLIENT_ID `
-    --password $env:ARM_CLIENT_SECRET `
-    --tenant $env:ARM_TENANT_ID `
+    --username $clientId `
+    --password $clientSecret `
+    --tenant $tenantId `
     --output none
 
 if ($LASTEXITCODE -ne 0) {
@@ -43,9 +57,9 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Set subscription if provided
-if ($env:ARM_SUBSCRIPTION_ID) {
-    az account set --subscription $env:ARM_SUBSCRIPTION_ID
+# Set subscription
+if ($subscriptionId) {
+    az account set --subscription $subscriptionId
 }
 
 Write-Host ""

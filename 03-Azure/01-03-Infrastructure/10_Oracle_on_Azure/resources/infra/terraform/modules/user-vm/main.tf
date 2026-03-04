@@ -37,10 +37,11 @@ resource "azurerm_virtual_network" "vm" {
 }
 
 resource "azurerm_subnet" "vm" {
-  name                 = "snet-vm-${local.name_prefix}"
-  resource_group_name  = azurerm_resource_group.vm.name
-  virtual_network_name = azurerm_virtual_network.vm.name
-  address_prefixes     = [cidrsubnet(var.vnet_cidr, 8, 0)] # /24 subnet
+  name                            = "snet-vm-${local.name_prefix}"
+  resource_group_name             = azurerm_resource_group.vm.name
+  virtual_network_name            = azurerm_virtual_network.vm.name
+  address_prefixes                = [cidrsubnet(var.vnet_cidr, 8, 0)] # /24 subnet
+  default_outbound_access_enabled = false
 }
 
 # ===============================================================================
@@ -197,11 +198,22 @@ resource "azurerm_role_assignment" "vm_admin_login" {
 # Private DNS Zone Link
 # ===============================================================================
 
+locals {
+  use_existing_dns_zone = var.dns_zone_resource_group != null && trim(var.dns_zone_resource_group) != ""
+}
+
+resource "azurerm_private_dns_zone" "odaa" {
+  count               = var.create_dns_link && !local.use_existing_dns_zone ? 1 : 0
+  name                = var.dns_zone_name
+  resource_group_name = azurerm_resource_group.vm.name
+  tags                = var.tags
+}
+
 resource "azurerm_private_dns_zone_virtual_network_link" "odaa" {
-  count                 = var.dns_zone_id != null ? 1 : 0
+  count                 = var.create_dns_link ? 1 : 0
   name                  = "link-${local.name_prefix}"
-  resource_group_name   = var.dns_zone_resource_group
-  private_dns_zone_name = var.dns_zone_name
+  resource_group_name   = local.use_existing_dns_zone ? var.dns_zone_resource_group : azurerm_resource_group.vm.name
+  private_dns_zone_name = local.use_existing_dns_zone ? var.dns_zone_name : azurerm_private_dns_zone.odaa[0].name
   virtual_network_id    = azurerm_virtual_network.vm.id
   registration_enabled  = false
   tags                  = var.tags

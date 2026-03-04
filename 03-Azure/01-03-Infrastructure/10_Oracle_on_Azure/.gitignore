@@ -45,6 +45,10 @@ resources/**/terraform.tfvars
 resources/**/*.auto.tfvars
 resources/**/*.auto.tfvars.json
 
+# Packer variable files (may contain sensitive data)
+resources/**/*.pkrvars.hcl
+resources/**/*.auto.pkrvars.hcl
+
 # Override files
 resources/**/override.tf
 resources/**/override.tf.json

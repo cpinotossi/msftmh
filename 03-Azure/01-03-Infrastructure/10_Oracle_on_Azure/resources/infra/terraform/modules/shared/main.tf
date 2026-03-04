@@ -33,13 +33,14 @@ resource "azurerm_shared_image_gallery" "gallery" {
 # ===============================================================================
 
 resource "azurerm_shared_image" "oracle_workshop" {
-  name                = var.image_name
-  gallery_name        = azurerm_shared_image_gallery.gallery.name
-  resource_group_name = azurerm_resource_group.shared.name
-  location            = azurerm_resource_group.shared.location
-  os_type             = "Linux"
-  hyper_v_generation  = "V2"
-  architecture        = "x64"
+  name                      = var.image_name
+  gallery_name              = azurerm_shared_image_gallery.gallery.name
+  resource_group_name       = azurerm_resource_group.shared.name
+  location                  = azurerm_resource_group.shared.location
+  os_type                   = "Linux"
+  hyper_v_generation        = "V2"
+  architecture              = "x64"
+  trusted_launch_supported  = true
 
   identifier {
     publisher = "OracleWorkshop"
@@ -48,14 +49,4 @@ resource "azurerm_shared_image" "oracle_workshop" {
   }
 
   tags = var.tags
-}
-
-# ===============================================================================
-# Private DNS Zone for Oracle ODAA (Paris Region)
-# ===============================================================================
-
-resource "azurerm_private_dns_zone" "odaa_paris" {
-  name                = var.odaa_dns_zone_name
-  resource_group_name = azurerm_resource_group.shared.name
-  tags                = var.tags
 }

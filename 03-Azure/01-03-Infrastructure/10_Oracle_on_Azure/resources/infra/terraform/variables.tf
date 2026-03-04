@@ -128,6 +128,30 @@ variable "odaa_dns_zone_name" {
   default     = "adb.eu-paris-1.oraclecloud.com"
 }
 
+variable "odaa_db_type" {
+  description = "Type of Oracle database to create per user: 'none' (networking only), 'adb' (Autonomous Database), 'basedb' (Base Database on Exadata)"
+  type        = string
+  default     = "none"
+
+  validation {
+    condition     = contains(["none", "adb", "basedb"], var.odaa_db_type)
+    error_message = "odaa_db_type must be one of: none, adb, basedb"
+  }
+}
+
+variable "odaa_admin_password" {
+  description = "Admin password for Oracle databases (required when odaa_db_type = 'adb')"
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "odaa_byol" {
+  description = "Use Bring Your Own License for Oracle databases (false = License Included)"
+  type        = bool
+  default     = false
+}
+
 # ===============================================================================
 # Tags
 # ===============================================================================

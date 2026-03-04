@@ -92,19 +92,14 @@ The main configuration reads `identity/user_credentials.json` for object IDs.
 
 ```powershell
 cd identity
-# Update terraform.tfvars: password_rotation_trigger = "event-december-2025"
-terraform apply
-```
-
-Or use the helper script:
-```powershell
-.\scripts\rotate-passwords.ps1 -Phase start -EventName "december-workshop"
+# Rotate passwords + reset MFA for new event
+.\scripts\manage-users.ps1 -Action reset-all -EventName "december-workshop"
 ```
 
 ### 4. Revoke Access (After Each Event)
 
 ```powershell
-.\scripts\rotate-passwords.ps1 -Phase end
+.\scripts\manage-users.ps1 -Action rotate-passwords -EventName "post-december"
 ```
 
 ## Variables

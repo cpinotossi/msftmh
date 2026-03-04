@@ -26,18 +26,22 @@ A more detailed description can be found here: [Oracle Documentation: Oracle's d
 
 Azure delegated subnets allow you to delegate exclusive control of a subnet within your VNet to a specific Azure service. When you delegate a subnet, the service can deploy and manage its own network resources (NICs, endpoints, routing) within that subnet without requiring you to provision each resource manually. Traffic still flows privately over your VNet, and you remain in control of higher-level constructs like NSGs and route tables.
 
+## Verify if the Deletagted Subnet is Available for ODAA
+
 The delegated subnet is part of the VNet inside your ODAA subscription.
-1. Click on the subscription sub-mhodaa.
-2. Change to the available resource group odaa-user00.
-3. You see the deployed resources inside the resource group and use the VNet odaa-user00.
-4. In the VNet overview, you find under the sub-menu Settings the menu Subnets.
-5. In the menu Subnets, you see the subnet and inside the table the delegation for "Oracle.Database/networkAttachments".
+
+1. Log in to the [Azure portal](https://portal.azure.com).
+2. Click on the subscription sub-mhodaa.
+3. Change to the available resource group rg-odaa-user00.
+4. You see the deployed resources inside the resource group and use the VNet vnet-odaa-user00.
+5. In the VNet overview, you find under the sub-menu Settings the menu Subnets.
+6. In the menu Subnets, you see the subnet and inside the table the delegation for "Oracle.Database/networkAttachments".
    ![Overview delegated subnet to Oracle.Database/networkAttachments](media/image.png)
 
 
 ## 🛠️ Create an ODAA Autonomous Database Instance
 
-### Log in to the [Azure portal](https://portal.azure.com)
+### Oracle Database@Azure in the Azure Portal
 
 In the Azure portal, search for Oracle Services and select **Oracle Database@Azure**.
 

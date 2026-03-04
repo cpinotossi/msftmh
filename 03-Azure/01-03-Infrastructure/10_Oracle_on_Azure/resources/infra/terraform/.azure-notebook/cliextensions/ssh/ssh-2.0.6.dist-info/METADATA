@@ -1,0 +1,23 @@
+Metadata-Version: 2.0
+Name: ssh
+Version: 2.0.6
+Summary: SSH into Azure VMs using RBAC and AAD OpenSSH Certificates
+Home-page: https://github.com/Azure/azure-cli-extensions/tree/main/src/ssh
+Author: Microsoft Corporation
+Author-email: azpycli@microsoft.com
+License: MIT
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: System Administrators
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: License :: OSI Approved :: MIT License
+Requires-Dist: oschmod==0.3.12
+Requires-Dist: oras==0.1.30
+Requires-Dist: oschmod (==0.3.12)
+Requires-Dist: oras (==0.1.30)
+
+SSH into Azure VMs using RBAC and AAD OpenSSH Certificates.  The client generates (or uses existing) OpenSSH keys that are then signed by AAD into OpenSSH certificates for access to Azure VMs with the AAD Extension installed.
