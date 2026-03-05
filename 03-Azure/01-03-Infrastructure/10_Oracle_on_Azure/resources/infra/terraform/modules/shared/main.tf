@@ -29,6 +29,26 @@ resource "azurerm_shared_image_gallery" "gallery" {
 }
 
 # ===============================================================================
+# SSH Key Pair (shared across all workshop VMs)
+# ===============================================================================
+# Auto-generated RSA key pair. Workshop users login via 'az ssh vm' (Entra ID).
+# This key is only for admin emergency access.
+# ===============================================================================
+
+resource "tls_private_key" "workshop" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "azurerm_ssh_public_key" "workshop" {
+  name                = "ssh-workshop-admin"
+  resource_group_name = azurerm_resource_group.shared.name
+  location            = azurerm_resource_group.shared.location
+  public_key          = tls_private_key.workshop.public_key_openssh
+  tags                = var.tags
+}
+
+# ===============================================================================
 # Image Definition
 # ===============================================================================
 

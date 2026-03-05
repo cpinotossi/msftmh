@@ -79,11 +79,6 @@ variable "admin_username" {
   default     = "azureuser"
 }
 
-variable "admin_ssh_public_key" {
-  description = "SSH public key for VM access"
-  type        = string
-}
-
 variable "create_public_ip" {
   description = "Create public IPs for VMs (for direct SSH access)"
   type        = bool
@@ -178,7 +173,7 @@ variable "enable_entra_id_login" {
 variable "entra_id_admin_login" {
   description = "Grant admin (sudo) access to Entra ID users"
   type        = bool
-  default     = true
+  default     = false
 }
 
 # User Object IDs for Entra ID login (one per user)

@@ -65,6 +65,18 @@ resource "azurerm_subnet" "odaa" {
 }
 
 # ===============================================================================
+# RBAC: Entra ID User Contributor on Resource Group
+# ===============================================================================
+
+resource "azurerm_role_assignment" "odaa_db_creator" {
+  count                = var.entra_id_user_object_id != null ? 1 : 0
+  scope                = azurerm_resource_group.odaa.id
+  role_definition_id   = var.odaa_role_definition_id
+  principal_id         = var.entra_id_user_object_id
+  description          = "Allows Entra ID user to create Oracle ADB/BaseDB in ${azurerm_resource_group.odaa.name}"
+}
+
+# ===============================================================================
 # Autonomous Database (ADB) - per User
 # ===============================================================================
 # Created when db_type = "adb"

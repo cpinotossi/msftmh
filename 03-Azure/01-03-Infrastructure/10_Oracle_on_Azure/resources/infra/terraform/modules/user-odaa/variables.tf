@@ -30,6 +30,22 @@ variable "tags" {
 }
 
 # ===============================================================================
+# RBAC: Entra ID User Access
+# ===============================================================================
+
+variable "entra_id_user_object_id" {
+  description = "Entra ID user object ID to grant Oracle Database Creator on the ODAA resource group (null = skip)"
+  type        = string
+  default     = null
+}
+
+variable "odaa_role_definition_id" {
+  description = "Role definition resource ID for the Oracle Database Creator custom role (null = skip RBAC)"
+  type        = string
+  default     = null
+}
+
+# ===============================================================================
 # Database Type Selection
 # ===============================================================================
 

@@ -31,3 +31,14 @@ output "image_name" {
   description = "Name of the image definition"
   value       = azurerm_shared_image.oracle_workshop.name
 }
+
+output "ssh_public_key" {
+  description = "SSH public key for VM access (auto-generated)"
+  value       = tls_private_key.workshop.public_key_openssh
+}
+
+output "ssh_private_key" {
+  description = "SSH private key for admin emergency access (sensitive)"
+  value       = tls_private_key.workshop.private_key_pem
+  sensitive   = true
+}

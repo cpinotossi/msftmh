@@ -1,4 +1,2 @@
-# Ensure shell scripts and env files use Unix line endings
+# Ensure shell scripts use Unix line endings
 *.sh text eol=lf
-.env text eol=lf
-.env.example text eol=lf
