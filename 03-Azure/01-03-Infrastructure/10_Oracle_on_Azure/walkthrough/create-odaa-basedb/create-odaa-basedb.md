@@ -26,7 +26,7 @@ A more detailed description can be found here: [Oracle Documentation: Oracle's d
 
 Azure delegated subnets allow you to delegate exclusive control of a subnet within your VNet to a specific Azure service. When you delegate a subnet, the service can deploy and manage its own network resources (NICs, endpoints, routing) within that subnet without requiring you to provision each resource manually. Traffic still flows privately over your VNet, and you remain in control of higher-level constructs like NSGs and route tables.
 
-## Verify if the Deletagted Subnet is Available for ODAA
+## Verify if the Delegated Subnet is Available for ODAA
 
 The delegated subnet is part of the VNet inside your ODAA subscription.
 

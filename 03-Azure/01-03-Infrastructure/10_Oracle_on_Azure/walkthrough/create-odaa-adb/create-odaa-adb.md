@@ -20,13 +20,13 @@ A more detailed description can be found here: [Oracle Documentation: Oracle's d
 
 **NOTE**: For this Microhack, we have already created the corresponding VNets and subnets, so no additional action is required in this step.
 
-![Already created delegated subnet](media/image%20copy%205.png)
+![Already created delegated subnet](media/delegated_subnet_created.png)
 
 ## 🧭 What is an Azure Delegated Subnet?
 
 Azure delegated subnets allow you to delegate exclusive control of a subnet within your VNet to a specific Azure service. When you delegate a subnet, the service can deploy and manage its own network resources (NICs, endpoints, routing) within that subnet without requiring you to provision each resource manually. Traffic still flows privately over your VNet, and you remain in control of higher-level constructs like NSGs and route tables.
 
-## Verify if the Deletagted Subnet is Available for ODAA
+## Verify if the Delegated Subnet is Available for ODAA
 
 The delegated subnet is part of the VNet inside your ODAA subscription.
 
@@ -36,8 +36,7 @@ The delegated subnet is part of the VNet inside your ODAA subscription.
 4. You see the deployed resources inside the resource group and use the VNet vnet-odaa-user00.
 5. In the VNet overview, you find under the sub-menu Settings the menu Subnets.
 6. In the menu Subnets, you see the subnet and inside the table the delegation for "Oracle.Database/networkAttachments".
-   ![Overview delegated subnet to Oracle.Database/networkAttachments](media/image.png)
-
+   ![Overview delegated subnet to Oracle.Database/networkAttachments](media/delegated_subnet_networkattachments.png)
 
 ## 🛠️ Create an ODAA Autonomous Database Instance
 
@@ -45,13 +44,13 @@ The delegated subnet is part of the VNet inside your ODAA subscription.
 
 In the Azure portal, search for Oracle Services and select **Oracle Database@Azure**.
 
-![Azure portal Oracle Database@Azure](media/image%20copy%206.png)
+![Azure portal Oracle Database@Azure](media/azure_portal_odaa_service.png)
 
 ### Select Oracle Autonomous Database
 
 Select **Create Oracle Autonomous Database** and "create" to start the creation of the Autonomous Database.
 
-![Azure portal Oracle Autonomous Database](media/image%20copy%207.png)
+![Azure portal Oracle Autonomous Database](media/azure_portal_adb_create.png)
 
 ### Define Azure Basics
 
@@ -60,7 +59,7 @@ Select **Create Oracle Autonomous Database** and "create" to start the creation 
 - Database name: user<your user number>
 - Region: France Central
 
-![Azure portal Oracle Autonomous Database Basics](media/image%20copy%208.png)
+![Azure portal Oracle Autonomous Database Basics](media/adb_basics_settings.png)
 
 ### Settings of the ADB
 
@@ -86,19 +85,19 @@ Select **Create Oracle Autonomous Database** and "create" to start the creation 
 
 1.  Choose for the connectivity the Access type: Managed private virtual network IP only
 
-![An image of the Oracle Autonomous database setting is shown here.](media/image%20copy%209.png)
+![An image of the Oracle Autonomous database setting is shown here.](media/adb_network_setting.png)
 
 ### Final Summary of the ADB Shared Settings
 
 Review the final summary and click "Create".
 
-![Final summary of ODAA Setup](media/image%20copy%2010.png)
+![Final summary of ODAA Setup](media/adb_creation_summary.png)
 
 ### Deployment finished
 
 The deployment will take between 10 to 15 minutes.
 
-![ODAA deployment in progress](media/image%20copy%2011.png)
+![ODAA deployment in progress](media/adb_deployment_progress.png)
 
 After the deployment is finished, you see the overview page of your newly created Autonomous Database.
 
@@ -138,13 +137,13 @@ Accessing OCI-native logs, metrics, events, and support tools when Oracle asks y
 In short: day‑to‑day database and app operations happen in Azure and the Azure portal; the OCI console is needed when you touch the underlying Oracle/OCI tenancy, networking, or advanced Oracle platform services that sit “behind” Oracle Database@Azure.
 
 To access the OCI console, use the following link after you are logged in to the Azure portal under your newly created ODAA Autonomous Database resource:
-![Azure link to OCI console](media/image%20copy%2012.png)
+![Azure link to OCI console](media/azure_link_oci_console.png)
 
 At the OCI console login page, select the "Entra ID" link:
-![OCI login via Entra ID](media/image%20copy%202.png)
+![OCI login via Entra ID](media/oci_login_entra_id.png)
 
 You will land on the Oracle ADB databases overview page:
-![OCI ADB overview page](media/image%20copy%2013.png)
+![OCI ADB overview page](media/oci_adb_overview.png)
 
 <!-- The compartment structure in OCI looks like:
 ~~~text
@@ -162,7 +161,7 @@ You will land on the Oracle ADB databases overview page:
 ## Check the Existing VNet Peering
 
 To save time to focus on the ODAA service itself, the VNet peering between both subscriptions is already available and can be verified. Here you have to switch to the resource group aks-user[assigned number]. Under the section Settings, you find the menu point Peering. Open the peering and check if the peering sync status and peering state are active.
-![Overview if the VNet peering is working](media/image%20copy%204.png)
+![Overview if the VNet peering is working](media/vnet_peering_status.png)
 
 The check of the VNet peering can be done from the ODAA side as well.
 

@@ -388,7 +388,7 @@ In this microhack, you deploy the ADB and/or Base database via the **Azure porta
 >
 >3. Name: **BaseDBXX**
 >4. Region: **France Central**
->5. Resource Anchoer: **anchorodaa**
+>5. Resource Anchor: **anchorodaa**
 >6. Availability Zone: **Zone 1**
 >7. Shape: **automatically filled**
 >8. Database version: **last available version with patchset (23.x)**

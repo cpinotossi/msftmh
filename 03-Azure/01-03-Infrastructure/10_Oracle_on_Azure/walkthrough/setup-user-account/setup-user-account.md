@@ -43,7 +43,7 @@ Login to the Azure portal by calling the URL https://portal.azure.com in the bro
 
 Following you see the step of a MFA authentication. If you have any additional question check the available online resources under [MFA](https://learn.microsoft.com/en-us/entra/identity/authentication/tutorial-enable-azure-mfa)
 
-1. After you have open the first time the URL [Azure Portal](https://portal.azure.com/) you are forwarded to enable the MFA to access your Azure subscription. The following picutures will guide you through the process visually.
+1. After you have open the first time the URL [Azure Portal](https://portal.azure.com/) you are forwarded to enable the MFA to access your Azure subscription. The following pictures will guide you through the process visually.
 
     1. Press next to follow the authentication process.
 
@@ -77,24 +77,21 @@ A first important step is successfully finished!
 
 ### First check resource groups and roles are available
 
-After you successfully logged into the Azure portal a first check could be the verification of the required resource groups for the Microhack.
+After you sign in to the Azure portal, first check that the required resource group for the Microhack is available.
 
-#### Move to the resource group in the Azure portal or search for the name in the upper available search bar
+#### Go to Resource groups in the Azure portal or search for the name in the top search bar
 
-![find azure resource group](media/image.png)
+![find azure resource group](media/find_resource_group.png)
 
-#### Two resource group are in interest for the microhack and should be created "aks-user[your user number]" and "odaa-user[your user number]"
+#### One resource group is required for this Microhack: "rg-odaa-user[your user number]"
 
-![see your azure resource group](media/image%20copy.png)
+![see your azure resource group](media/resource_group_overview.png)
+
 
 #### Your Resources
 
-Should look simiar to this one for Resource Group aks-user[your user number]
+It should look similar to this for Resource Group rg-odaa-user[your user number].
 
-![see your azure resource group](media/image%20copy%202.png)
-
-Should look simiar to this one for Resource Group odaa-user[your user number]
-
-![see your azure resource group](media/image%20copy%203.png)
+![see your azure resource group](media/resource_group_resources.png)
  
 [Back to workspace README](../../README.md)
