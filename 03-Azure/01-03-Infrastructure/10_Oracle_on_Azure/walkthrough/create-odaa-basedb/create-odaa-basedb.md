@@ -1,10 +1,10 @@
-# 🚀 Challenge 2: Create Azure ODAA [Oracle Database@Azure] Database Resources
+# 🚀 Challenge: Create Azure ODAA [Oracle Database@Azure] Base Database Resources
 
 [Back to workspace README](../../README.md)
 
 1. Registration of the Azure resource provider in Azure. In our case they are already deployed but can be checked if they are registered - see [Oracle Documentation: Oracle Database at Azure Network Enhancements](https://learn.microsoft.com/en-us/azure/oracle/oracle-db/oracle-database-network-plan)
 2. Check the availability of a VNet and delegated subnet for the deployment of the database.
-3. Deploy an Oracle ADB in Azure.
+3. Deploy an Oracle BaseDB in Azure.
    1. Important: Choose the region <font color=red>FRANCE CENTRAL</font>
    2. Use in the Networking section <font color=red>Managed private virtual network IP only</font>
 4. Furthermore, you will deploy in this chapter an ADB database via the Azure Portal.
@@ -20,8 +20,6 @@ A more detailed description can be found here: [Oracle Documentation: Oracle's d
 
 **NOTE**: For this Microhack, we have already created the corresponding VNets and subnets, so no additional action is required in this step.
 
-![Already created delegated subnet](media/image%20copy%205.png)
-
 ## 🧭 What is an Azure Delegated Subnet?
 
 Azure delegated subnets allow you to delegate exclusive control of a subnet within your VNet to a specific Azure service. When you delegate a subnet, the service can deploy and manage its own network resources (NICs, endpoints, routing) within that subnet without requiring you to provision each resource manually. Traffic still flows privately over your VNet, and you remain in control of higher-level constructs like NSGs and route tables.
@@ -30,34 +28,153 @@ Azure delegated subnets allow you to delegate exclusive control of a subnet with
 
 The delegated subnet is part of the VNet inside your ODAA subscription.
 
-1. Log in to the [Azure portal](https://portal.azure.com).
-2. Click on the subscription sub-mhodaa.
-3. Change to the available resource group rg-odaa-user00.
-4. You see the deployed resources inside the resource group and use the VNet vnet-odaa-user00.
-5. In the VNet overview, you find under the sub-menu Settings the menu Subnets.
-6. In the menu Subnets, you see the subnet and inside the table the delegation for "Oracle.Database/networkAttachments".
-   ![Overview delegated subnet to Oracle.Database/networkAttachments](media/image.png)
+### Log in to the Azure Portal
+[Azure portal](https://portal.azure.com).
+
+## Search for Resource Groups "rg-odaa-shared"
+![Search Resource Group](media/adb5.png)
+
+### Click on virtual Network Resource "vnet-odaa-shared"
+![Select VNet](media/adb6.png)
+
+### In the VNet overview
+You find under the sub-menu Settings the menu Subnets. In the menu Subnets, you see the subnet and inside the table the delegation for "Oracle.Database/networkAttachments".
+   ![Overview delegated subnet to Oracle.Database/networkAttachments](media/adb7.png)
 
 
-## 🛠️ Create an ODAA Autonomous Database Instance
+## 🛠️ Create an ODAA Base Database Instance
+
+### In the Azure portal, search for Oracle Services and select **Oracle Database@Azure**. 
+![Azure portal Oracle Database@Azure](media/adb8.png)
+
+### Create Network Anchor
+
+Select "Multicloud Resources", select Tab "Network Anchors" and select "Create".
+![Azure portal Oracle Database@Azure](media/basedb1.png)
+
+### Basic Tab
+
+***Project Details***
+
+| Field | Value | Description |
+|-------|-------|-------------|
+| **Subscription** | `sub-mhodaa` | Select your ODAA subscription |
+| **Resource group** | `rg-odaa-shared` | Select or create a shared resource group for ODAA resources |
+
+***Network Anchor Configuration***
+
+| Field | Value | Description |
+|-------|-------|-------------|
+| **Name** | `nw-anchor-user<USER-NUMBER>` | Unique name for the network anchor (e.g., `nw-anchor-user<USER-NUMBER>`) |
+| **Region** | `France Central` | Azure region matching your ODAA infrastructure |
+| **Availability zone** | `Zone 1` | Select the availability zone for the anchor |
+| **Resource Anchor** | `anchor-odaa-shared` | Reference to the shared ODAA resource anchor |
+| **Virtual network** | `vnet-odaa-shared` | VNet where ODAA will be deployed |
+| **Delegated Subnet** | `snet-odaa-delegated` | Subnet delegated to Oracle.Database/networkAttachments |
+| **Backup subnet CIDR** | *(leave empty)* | Optional - CIDR for backup subnet if needed |
+
+***DNS Configuration***
+
+| Field | Value | Description |
+|-------|-------|-------------|
+| **Create DNS Listening Endpoint** | ☑️ Enabled | Creates a DNS listener for name resolution |
+| **Replicate DNS Private zones during DB creation** | ☐ Disabled | Only enable if you need DNS zone replication |
+| **CIDR** | `10.0.0.0/8` | IP range for DNS resolution (must cover your VNet) |
+| **Create DNS Forwarding Endpoint** | ☑️ Enabled | Enables DNS forwarding to Azure DNS |
+
+![Azure portal Oracle Database@Azure](media/basedb2.png)
+
+### Consent Tab
+
+Agree to the terms and conditions
+
+![Azure portal Oracle Database@Azure](media/basedb3.png)
+
+### Tags Tab
+
+Keep it as it is.
+
+### Review + Create Tab
+
+Review the configuration and click "Create" to deploy the network anchor.
+
+![Azure portal Oracle Database@Azure](media/basedb4.png)
+
+### Deployment finished
+
+The deployment will take between 10 to 15 minutes.
+
+![ODAA deployment in progress](media/basedb5.png)
+
+After the deployment is finished, click the blue button "go to resource".
+
+![ODAA deployment in progress](media/basedb6.png)
+
+Inside the resource group select your newly created  network anchor.
+
+![ODAA deployment in progress](media/basedb7.png)
+
+
+~~~powershell
+az config set extension.dynamic_install_allow_preview=true
+az oracle-database resource-anchor list -g anchorodaa 
+$anchoreId=az oracle-database resource-anchor show -g anchorodaa -n anchorodaa --query id -o tsv
+$subnetId=az network vnet subnet show -g rg-odaa-user02 -n snet-odaa-user02 --vnet-name vnet-odaa-user02 --query id -o tsv=az network vnet subnet show -g rg-odaa-user02 -n snet-odaa-user02 --vnet-name vnet-odaa-user02 --query id -o tsv
+~~~
+
+~~~json
+[
+  {
+    "id": "/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/anchorodaa/providers/Oracle.Database/resourceAnchors/anchorodaa",
+    "location": "global",
+    "name": "anchorodaa",
+    "properties": {
+      "linkedCompartmentId": "ocid1.compartment.oc1..aaaaaaaaxgykufgf2vzjdygpwrqvhms34gl2mjrio2gtxspbdz2s56rityga",
+      "provisioningState": "Succeeded"
+    },
+    "resourceGroup": "anchorodaa",
+    "systemData": {
+      "createdAt": "2026-03-05T11:54:01.4265491Z",
+      "createdBy": "ga1@cptazure.org",
+      "createdByType": "User",
+      "lastModifiedAt": "2026-03-05T11:54:45.8531673Z",
+      "lastModifiedBy": "a50e6610-5416-4c2a-88b6-172c7f376f7d",
+      "lastModifiedByType": "Application"
+    },
+    "tags": {},
+    "type": "oracle.database/resourceanchors"
+  }
+]
+
+~~~
+
+~~~powershell
+# List the available resource anchor, should be empty
+az oracle-database network-anchor list
+# create network anchor
+az oracle-database network-anchor create -n nw-anchor-user02 -g rg-odaa-user02 --dns-listening-endpoint-allowed-cidrs "10.0.0.0/8" --is-oracle-dns-forwarding-endpoint-enabled true --is-oracle-dns-listening-endpoint-enabled true --resource-anchor-id $anchoreId --subnet-id $subnetId --verbose
+
+
+
+
 
 ### Oracle Database@Azure in the Azure Portal
 
 In the Azure portal, search for Oracle Services and select **Oracle Database@Azure**.
 
-![Azure portal Oracle Database@Azure](media/image%20copy%206.png)
+![Azure portal Oracle Database@Azure](media/basedb.2.png)
 
 ### Select Oracle Autonomous Database
 
 Select **Create Oracle Autonomous Database** and "create" to start the creation of the Autonomous Database.
 
-![Azure portal Oracle Autonomous Database](media/image%20copy%207.png)
+![Azure portal Oracle Autonomous Database](media/basedb.3.png)
 
 ### Define Azure Basics
 
 - Subscription: Select "sub-mhodaa"
-- Resource Group: Select "odaa-user<your user number>"
-- Database name: user<your user number>
+- Resource Group: Select "rg-odaa-user<YOUR-USER-NUMBER>"
+- Database name: baseDBuser<YOUR-USER-NUMBER>
 - Region: France Central
 
 ![Azure portal Oracle Autonomous Database Basics](media/image%20copy%208.png)

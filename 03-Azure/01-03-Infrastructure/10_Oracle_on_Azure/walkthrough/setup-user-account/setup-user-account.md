@@ -1,4 +1,4 @@
-# Setup your User Account on Azure
+# Challenge: Setup your User Account on Azure
 
 [Back to workspace README](../../README.md)
 

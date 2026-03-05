@@ -1,15 +1,35 @@
 # ===============================================================================
-# Provider Configuration - 2 Subscriptions (Direct Peering)
+# Provider Configuration - 3 Subscriptions (Shared ODAA VNet)
 # ===============================================================================
 # This file configures Azure providers for the Oracle on Azure infrastructure:
-# - azurerm.vm:   VM Subscription (Workshop VMs, Compute Gallery)
-# - azurerm.odaa: ODAA Subscription (Oracle Database@Azure)
+# - azurerm.gallery: Gallery Subscription (Compute Gallery) — sub-mhcore
+# - azurerm.vm:      VM Subscription (Workshop VMs, VNets, DNS) — sub-mh0
+# - azurerm.odaa:    ODAA Subscription (Shared VNet, Anchors, User RGs) — sub-mhodaa
+# - azapi:           AzAPI provider for Oracle network anchors (ODAA sub)
 #
-# Each user's VM VNet peers directly with their ODAA VNet (no hub).
+# All users share a single ODAA VNet+Subnet. Each user VM VNet peers to it.
 # ===============================================================================
 
 # ===============================================================================
-# Default Provider (VM Subscription)
+# Gallery Provider (sub-mhcore: Compute Gallery)
+# ===============================================================================
+
+provider "azurerm" {
+  alias           = "gallery"
+  subscription_id = var.gallery_subscription_id
+  tenant_id       = var.tenant_id
+  client_id       = var.client_id
+  client_secret   = var.client_secret
+
+  features {
+    resource_group {
+      prevent_deletion_if_contains_resources = false
+    }
+  }
+}
+
+# ===============================================================================
+# VM Provider (sub-mh0: Workshop VMs, VNets)
 # ===============================================================================
 
 provider "azurerm" {
@@ -32,7 +52,7 @@ provider "azurerm" {
 }
 
 # ===============================================================================
-# ODAA Provider (Oracle Database@Azure Subscription)
+# ODAA Provider (sub-mhodaa: Shared ODAA VNet, Anchors, User RGs)
 # ===============================================================================
 
 provider "azurerm" {
@@ -50,22 +70,14 @@ provider "azurerm" {
 }
 
 # ===============================================================================
-# TEMPORARY: Hub Provider (for destroying orphaned hub resources in state)
-# Remove this block after hub resources are destroyed!
+# AzAPI Provider (ODAA Subscription — for Oracle Resource/Network Anchors)
 # ===============================================================================
 
-provider "azurerm" {
-  alias           = "hub"
-  subscription_id = var.vm_subscription_id
+provider "azapi" {
+  subscription_id = var.odaa_subscription_id
   tenant_id       = var.tenant_id
   client_id       = var.client_id
   client_secret   = var.client_secret
-
-  features {
-    resource_group {
-      prevent_deletion_if_contains_resources = false
-    }
-  }
 }
 
 # ===============================================================================

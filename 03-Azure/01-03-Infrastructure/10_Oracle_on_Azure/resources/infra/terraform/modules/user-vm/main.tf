@@ -40,7 +40,7 @@ resource "azurerm_subnet" "vm" {
   name                            = "snet-vm-${local.name_prefix}"
   resource_group_name             = azurerm_resource_group.vm.name
   virtual_network_name            = azurerm_virtual_network.vm.name
-  address_prefixes                = [cidrsubnet(var.vnet_cidr, 8, 0)] # /24 subnet
+  address_prefixes                = [var.vnet_cidr] # Full /24 VNet = one subnet
   default_outbound_access_enabled = false
 }
 
@@ -177,6 +177,22 @@ resource "azurerm_virtual_machine_extension" "aad_login" {
 # RBAC: Entra ID User Login Permission
 # ===============================================================================
 
+resource "azurerm_role_assignment" "vm_rg_reader" {
+  count                = var.enable_entra_id_login && var.entra_id_user_object_id != null ? 1 : 0
+  scope                = azurerm_resource_group.vm.id
+  role_definition_name = "Reader"
+  principal_id         = var.entra_id_user_object_id
+  description          = "Allows Entra ID user to see RG ${azurerm_resource_group.vm.name} in the portal"
+}
+
+resource "azurerm_role_assignment" "dns_zone_contributor" {
+  count                = var.enable_entra_id_login && var.entra_id_user_object_id != null && var.create_dns_link && !local.use_existing_dns_zone ? 1 : 0
+  scope                = azurerm_private_dns_zone.odaa[0].id
+  role_definition_name = "Private DNS Zone Contributor"
+  principal_id         = var.entra_id_user_object_id
+  description          = "Allows Entra ID user to manage Private DNS Zone in RG ${azurerm_resource_group.vm.name}"
+}
+
 resource "azurerm_role_assignment" "vm_user_login" {
   count                = var.enable_entra_id_login && var.entra_id_user_object_id != null ? 1 : 0
   scope                = azurerm_linux_virtual_machine.vm.id
@@ -195,7 +211,11 @@ resource "azurerm_role_assignment" "vm_admin_login" {
 }
 
 # ===============================================================================
-# Private DNS Zone Link
+# Private DNS Zone Link (optional — links existing DNS zone to this VM's VNet)
+# ===============================================================================
+# In the shared ODAA architecture, the DNS zone lives in the shared-odaa module.
+# Links are created at root level with the ODAA provider.
+# Set create_dns_link = false when using shared architecture.
 # ===============================================================================
 
 locals {

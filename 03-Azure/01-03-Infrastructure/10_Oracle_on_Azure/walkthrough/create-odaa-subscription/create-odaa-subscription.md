@@ -1,4 +1,4 @@
-# 🚀 Challenge 1: Create Azure ODAA [Oracle Database@Azure] Service
+# 🚀 Challenge: Create Azure ODAA [Oracle Database@Azure] Service
 
 [Back to workspace README](../../README.md)
 

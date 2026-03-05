@@ -23,16 +23,21 @@ variable "client_secret" {
 }
 
 # ===============================================================================
-# Subscription Configuration
+# Subscription Configuration (3 Subscriptions)
 # ===============================================================================
 
+variable "gallery_subscription_id" {
+  description = "Azure subscription ID for the Compute Gallery (sub-mhcore)"
+  type        = string
+}
+
 variable "vm_subscription_id" {
-  description = "Azure subscription ID for VM resources (Workshop VMs, Compute Gallery)"
+  description = "Azure subscription ID for Workshop VMs, VNets, DNS (sub-mh0)"
   type        = string
 }
 
 variable "odaa_subscription_id" {
-  description = "Azure subscription ID for ODAA resources (Oracle Database@Azure)"
+  description = "Azure subscription ID for ODAA shared VNet, anchors, user RGs (sub-mhodaa)"
   type        = string
 }
 
@@ -112,9 +117,15 @@ variable "vm_image_version" {
 # ===============================================================================
 
 variable "odaa_vnet_cidr" {
-  description = "CIDR block for ODAA VNets"
+  description = "CIDR block for the shared ODAA VNet (ADB)"
   type        = string
   default     = "192.168.0.0/16"
+}
+
+variable "basedb_vnet_cidr" {
+  description = "CIDR block for the shared BaseDB VNet"
+  type        = string
+  default     = "172.16.0.0/16"
 }
 
 variable "odaa_dns_zone_name" {
@@ -123,28 +134,9 @@ variable "odaa_dns_zone_name" {
   default     = "adb.eu-paris-1.oraclecloud.com"
 }
 
-variable "odaa_db_type" {
-  description = "Type of Oracle database to create per user: 'none' (networking only), 'adb' (Autonomous Database), 'basedb' (Base Database on Exadata)"
+variable "odaa_user_group_id" {
+  description = "Object ID of the Entra ID group (mh-odaa-user-grp) for shared ODAA RBAC"
   type        = string
-  default     = "none"
-
-  validation {
-    condition     = contains(["none", "adb", "basedb"], var.odaa_db_type)
-    error_message = "odaa_db_type must be one of: none, adb, basedb"
-  }
-}
-
-variable "odaa_admin_password" {
-  description = "Admin password for Oracle databases (required when odaa_db_type = 'adb')"
-  type        = string
-  default     = null
-  sensitive   = true
-}
-
-variable "odaa_byol" {
-  description = "Use Bring Your Own License for Oracle databases (false = License Included)"
-  type        = bool
-  default     = false
 }
 
 # ===============================================================================

@@ -1,17 +1,24 @@
 # ===============================================================================
-# Oracle on Azure Workshop - Simplified Infrastructure
+# Oracle on Azure Workshop - Shared ODAA VNet Architecture
 # ===============================================================================
 # This configuration deploys workshop infrastructure for 25 users:
-# - 1x Shared resources (Compute Gallery, DNS Zone)
-# - 25x User VMs with VNets
-# - 25x User ODAA VNets with delegated subnets
-# - 25x Direct VNet Peerings (VM <-> ODAA)
+# - 1x Shared Gallery resources (sub-mhcore: Compute Gallery, SSH key)
+# - 1x Shared ODAA resources (sub-mhodaa: VNet, Subnet, DNS, Anchors)
+# - 25x User VMs with unique /24 VNets (sub-mh0)
+# - 25x User ODAA RGs with RBAC (sub-mhodaa)
+# - 25x VNet peerings (per-user VM VNet <-> shared ODAA VNet)
+# - 25x DNS zone links (shared DNS zone -> per-user VM VNet)
+#
+# 3 Subscriptions:
+# - sub-mhcore (gallery_subscription_id): Compute Gallery only
+# - sub-mh0    (vm_subscription_id):      Workshop VMs, VNets
+# - sub-mhodaa (odaa_subscription_id):    Shared ODAA VNet, Anchors, User RGs
 #
 # Design Principles:
+# - All users share ONE ODAA VNet + ONE delegated subnet
+# - Each user gets a unique /24 VM VNet (10.0.X.0/24) peered to shared ODAA
+# - Each user gets their own ODAA RG to create databases via Portal
 # - No for_each or count loops - explicit module definitions
-# - Maximum readability and debuggability
-# - Each user's resources are independently defined
-# - Direct peering: each user's VM VNet peers directly with their ODAA VNet
 # ===============================================================================
 
 # ===============================================================================
@@ -30,11 +37,14 @@ resource "azurerm_role_definition" "odaa_db_creator" {
       # Oracle Database@Azure - full access
       "Oracle.Database/*",
 
-      # Network - read + join (use existing VNet/Subnet created by Terraform)
+      # Network - read + join (use existing shared VNet/Subnet)
       "Microsoft.Network/virtualNetworks/read",
       "Microsoft.Network/virtualNetworks/subnets/read",
       "Microsoft.Network/virtualNetworks/subnets/join/action",
       "Microsoft.Network/networkInterfaces/read",
+      "Microsoft.Network/networkInterfaces/write",
+      "Microsoft.Network/networkInterfaces/delete",
+      "Microsoft.Network/networkInterfaces/join/action",
 
       # Portal creates ARM deployments behind the scenes
       "Microsoft.Resources/deployments/*",
@@ -51,14 +61,14 @@ resource "azurerm_role_definition" "odaa_db_creator" {
 }
 
 # ===============================================================================
-# SHARED RESOURCES
+# SHARED RESOURCES — Compute Gallery + SSH Key (sub-mhcore)
 # ===============================================================================
 
 module "shared" {
   source = "./modules/shared"
 
   providers = {
-    azurerm = azurerm.vm
+    azurerm = azurerm.gallery
   }
 
   location     = var.location
@@ -68,7 +78,35 @@ module "shared" {
 }
 
 # ===============================================================================
-# USER 00 Peter Parker
+# SHARED ODAA — VNet, Subnet, DNS, Resource Anchor, Network Anchor (sub-mhodaa)
+# ===============================================================================
+
+module "shared_odaa" {
+  source = "./modules/shared-odaa"
+
+  providers = {
+    azurerm = azurerm.odaa
+    azapi   = azapi
+  }
+
+  location       = var.location
+  vnet_cidr      = var.odaa_vnet_cidr
+  basedb_vnet_cidr = var.basedb_vnet_cidr
+  tags           = var.tags
+}
+
+# RBAC: User group gets Oracle Database Creator on shared ODAA RG
+# (needed for network read/join on the shared VNet when creating DBs via Portal)
+resource "azurerm_role_assignment" "shared_odaa_group" {
+  provider           = azurerm.odaa
+  scope              = module.shared_odaa.resource_group_id
+  role_definition_id = azurerm_role_definition.odaa_db_creator.role_definition_resource_id
+  principal_id       = var.odaa_user_group_id
+  description        = "Allows workshop user group to read/join shared ODAA VNet for DB creation"
+}
+
+# ===============================================================================
+# USER 00 — Peter Parker
 # ===============================================================================
 
 module "user_vm_00" {
@@ -80,7 +118,7 @@ module "user_vm_00" {
 
   user_index           = 0
   location             = var.location
-  vnet_cidr            = "10.0.0.0/16"
+  vnet_cidr            = "10.0.0.0/24"
   vm_size              = var.vm_size
   vm_image_id          = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
   admin_username       = var.admin_username
@@ -108,20 +146,11 @@ module "user_odaa_00" {
 
   user_index = 0
   location   = var.location
-  vnet_cidr  = var.odaa_vnet_cidr
   tags       = var.tags
 
   # RBAC: Entra ID user gets Oracle Database Creator on their ODAA RG
   entra_id_user_object_id = lookup(var.user_object_ids, "00", null)
   odaa_role_definition_id = azurerm_role_definition.odaa_db_creator.role_definition_resource_id
-
-  # Database provisioning: BaseDB + BYOL
-  db_type            = "none"
-  byol               = var.odaa_byol
-  adb_admin_password = var.odaa_admin_password
-
-  # BaseDB: reuse shared SSH key for Cloud VM Cluster
-  basedb_ssh_public_keys = [module.shared.ssh_public_key]
 }
 
 module "peering_00" {
@@ -135,15 +164,33 @@ module "peering_00" {
   vm_vnet_id          = module.user_vm_00.vnet_id
   vm_vnet_name        = module.user_vm_00.vnet_name
   vm_resource_group   = module.user_vm_00.resource_group_name
-  odaa_vnet_id        = module.user_odaa_00.vnet_id
-  odaa_vnet_name      = module.user_odaa_00.vnet_name
-  odaa_resource_group = module.user_odaa_00.resource_group_name
+  odaa_vnet_id        = module.shared_odaa.vnet_id
+  odaa_vnet_name      = module.shared_odaa.vnet_name
+  odaa_resource_group = module.shared_odaa.resource_group_name
   peering_suffix      = "user00"
   tags                = var.tags
 }
 
+module "peering_basedb_00" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_00.vnet_id
+  vm_vnet_name        = module.user_vm_00.vnet_name
+  vm_resource_group   = module.user_vm_00.resource_group_name
+  odaa_vnet_id        = module.shared_odaa.basedb_vnet_id
+  odaa_vnet_name      = module.shared_odaa.basedb_vnet_name
+  odaa_resource_group = module.shared_odaa.resource_group_name
+  peering_suffix      = "basedb-user00"
+  tags                = var.tags
+}
+
 # ===============================================================================
-# USER 01 Bruce Wayne
+# USER 01 — Bruce Wayne
 # ===============================================================================
 
 module "user_vm_01" {
@@ -155,7 +202,7 @@ module "user_vm_01" {
 
   user_index           = 1
   location             = var.location
-  vnet_cidr            = "10.0.0.0/16"
+  vnet_cidr            = "10.0.1.0/24"
   vm_size              = var.vm_size
   vm_image_id          = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
   admin_username       = var.admin_username
@@ -183,20 +230,10 @@ module "user_odaa_01" {
 
   user_index = 1
   location   = var.location
-  vnet_cidr  = var.odaa_vnet_cidr
   tags       = var.tags
 
-  # RBAC: Entra ID user gets Oracle Database Creator on their ODAA RG
   entra_id_user_object_id = lookup(var.user_object_ids, "01", null)
   odaa_role_definition_id = azurerm_role_definition.odaa_db_creator.role_definition_resource_id
-
-  # Database provisioning: ADB + BYOL
-  db_type            = "none"
-  byol               = var.odaa_byol
-  adb_admin_password = var.odaa_admin_password
-
-  # BaseDB: reuse shared SSH key (unused for ADB, but required by module)
-  basedb_ssh_public_keys = [module.shared.ssh_public_key]
 }
 
 module "peering_01" {
@@ -210,15 +247,33 @@ module "peering_01" {
   vm_vnet_id          = module.user_vm_01.vnet_id
   vm_vnet_name        = module.user_vm_01.vnet_name
   vm_resource_group   = module.user_vm_01.resource_group_name
-  odaa_vnet_id        = module.user_odaa_01.vnet_id
-  odaa_vnet_name      = module.user_odaa_01.vnet_name
-  odaa_resource_group = module.user_odaa_01.resource_group_name
+  odaa_vnet_id        = module.shared_odaa.vnet_id
+  odaa_vnet_name      = module.shared_odaa.vnet_name
+  odaa_resource_group = module.shared_odaa.resource_group_name
   peering_suffix      = "user01"
   tags                = var.tags
 }
 
+module "peering_basedb_01" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_01.vnet_id
+  vm_vnet_name        = module.user_vm_01.vnet_name
+  vm_resource_group   = module.user_vm_01.resource_group_name
+  odaa_vnet_id        = module.shared_odaa.basedb_vnet_id
+  odaa_vnet_name      = module.shared_odaa.basedb_vnet_name
+  odaa_resource_group = module.shared_odaa.resource_group_name
+  peering_suffix      = "basedb-user01"
+  tags                = var.tags
+}
+
 # ===============================================================================
-# USER 02 Diana Prince
+# USER 02 — Diana Prince
 # ===============================================================================
 
 module "user_vm_02" {
@@ -230,7 +285,7 @@ module "user_vm_02" {
 
   user_index           = 2
   location             = var.location
-  vnet_cidr            = "10.0.0.0/16"
+  vnet_cidr            = "10.0.2.0/24"
   vm_size              = var.vm_size
   vm_image_id          = var.vm_image_version != null ? "${module.shared.image_id}/versions/${var.vm_image_version}" : null
   admin_username       = var.admin_username
@@ -258,20 +313,10 @@ module "user_odaa_02" {
 
   user_index = 2
   location   = var.location
-  vnet_cidr  = var.odaa_vnet_cidr
   tags       = var.tags
 
-  # RBAC: Entra ID user gets Oracle Database Creator on their ODAA RG
   entra_id_user_object_id = lookup(var.user_object_ids, "02", null)
   odaa_role_definition_id = azurerm_role_definition.odaa_db_creator.role_definition_resource_id
-
-  # Database provisioning: BaseDB + BYOL
-  db_type            = "none"
-  byol               = var.odaa_byol
-  adb_admin_password = var.odaa_admin_password
-
-  # BaseDB: reuse shared SSH key for Cloud VM Cluster
-  basedb_ssh_public_keys = [module.shared.ssh_public_key]
 }
 
 module "peering_02" {
@@ -285,9 +330,27 @@ module "peering_02" {
   vm_vnet_id          = module.user_vm_02.vnet_id
   vm_vnet_name        = module.user_vm_02.vnet_name
   vm_resource_group   = module.user_vm_02.resource_group_name
-  odaa_vnet_id        = module.user_odaa_02.vnet_id
-  odaa_vnet_name      = module.user_odaa_02.vnet_name
-  odaa_resource_group = module.user_odaa_02.resource_group_name
+  odaa_vnet_id        = module.shared_odaa.vnet_id
+  odaa_vnet_name      = module.shared_odaa.vnet_name
+  odaa_resource_group = module.shared_odaa.resource_group_name
   peering_suffix      = "user02"
+  tags                = var.tags
+}
+
+module "peering_basedb_02" {
+  source = "./modules/vnet-peering"
+
+  providers = {
+    azurerm.vm   = azurerm.vm
+    azurerm.odaa = azurerm.odaa
+  }
+
+  vm_vnet_id          = module.user_vm_02.vnet_id
+  vm_vnet_name        = module.user_vm_02.vnet_name
+  vm_resource_group   = module.user_vm_02.resource_group_name
+  odaa_vnet_id        = module.shared_odaa.basedb_vnet_id
+  odaa_vnet_name      = module.shared_odaa.basedb_vnet_name
+  odaa_resource_group = module.shared_odaa.resource_group_name
+  peering_suffix      = "basedb-user02"
   tags                = var.tags
 }
