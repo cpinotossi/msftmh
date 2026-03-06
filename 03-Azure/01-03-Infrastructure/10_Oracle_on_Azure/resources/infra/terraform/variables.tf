@@ -140,6 +140,21 @@ variable "odaa_user_group_id" {
 }
 
 # ===============================================================================
+# User Count
+# ===============================================================================
+
+variable "user_count" {
+  description = "Number of workshop users to create (0-25)"
+  type        = number
+  default     = 3
+
+  validation {
+    condition     = var.user_count >= 0 && var.user_count <= 25
+    error_message = "user_count must be between 0 and 25."
+  }
+}
+
+# ===============================================================================
 # Tags
 # ===============================================================================
 

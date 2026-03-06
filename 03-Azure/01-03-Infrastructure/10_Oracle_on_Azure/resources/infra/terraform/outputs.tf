@@ -31,81 +31,36 @@ output "shared_odaa_info" {
 }
 
 # ===============================================================================
-# User 00 — Peter Parker
+# Per-User VM Info (dynamic — driven by var.user_count)
 # ===============================================================================
 
-output "user_00_vm_info" {
-  description = "VM information for User 00"
+output "user_vm_info" {
+  description = "VM information for all users"
   value = {
-    vm_id          = module.user_vm_00.vm_id
-    vm_name        = module.user_vm_00.vm_name
-    public_ip      = module.user_vm_00.public_ip_address
-    private_ip     = module.user_vm_00.private_ip_address
-    resource_group = module.user_vm_00.resource_group_name
-    vnet_id        = module.user_vm_00.vnet_id
+    for key, vm in module.user_vm : "user${key}" => {
+      vm_id          = vm.vm_id
+      vm_name        = vm.vm_name
+      public_ip      = vm.public_ip_address
+      private_ip     = vm.private_ip_address
+      resource_group = vm.resource_group_name
+      vnet_id        = vm.vnet_id
+    }
   }
 }
 
-output "user_00_odaa_rg" {
-  description = "ODAA RG for User 00"
-  value       = module.user_odaa_00.resource_group_name
-}
-
-output "ssh_command_user00" {
-  description = "SSH command to connect to User 00 VM"
-  value       = module.user_vm_00.public_ip_address != null ? "az ssh vm --ip ${module.user_vm_00.public_ip_address}" : "No public IP"
-}
-
-# ===============================================================================
-# User 01 — Bruce Wayne
-# ===============================================================================
-
-output "user_01_vm_info" {
-  description = "VM information for User 01"
+output "user_odaa_rgs" {
+  description = "ODAA resource group names for all users"
   value = {
-    vm_id          = module.user_vm_01.vm_id
-    vm_name        = module.user_vm_01.vm_name
-    public_ip      = module.user_vm_01.public_ip_address
-    private_ip     = module.user_vm_01.private_ip_address
-    resource_group = module.user_vm_01.resource_group_name
-    vnet_id        = module.user_vm_01.vnet_id
+    for key, odaa in module.user_odaa : "user${key}" => odaa.resource_group_name
   }
 }
 
-output "user_01_odaa_rg" {
-  description = "ODAA RG for User 01"
-  value       = module.user_odaa_01.resource_group_name
-}
-
-output "ssh_command_user01" {
-  description = "SSH command to connect to User 01 VM"
-  value       = module.user_vm_01.public_ip_address != null ? "az ssh vm --ip ${module.user_vm_01.public_ip_address}" : "No public IP"
-}
-
-# ===============================================================================
-# User 02 — Diana Prince
-# ===============================================================================
-
-output "user_02_vm_info" {
-  description = "VM information for User 02"
+output "ssh_commands" {
+  description = "SSH commands to connect to all user VMs"
   value = {
-    vm_id          = module.user_vm_02.vm_id
-    vm_name        = module.user_vm_02.vm_name
-    public_ip      = module.user_vm_02.public_ip_address
-    private_ip     = module.user_vm_02.private_ip_address
-    resource_group = module.user_vm_02.resource_group_name
-    vnet_id        = module.user_vm_02.vnet_id
+    for key, vm in module.user_vm : "user${key}" =>
+      vm.public_ip_address != null ? "az ssh vm --ip ${vm.public_ip_address}" : "No public IP"
   }
-}
-
-output "user_02_odaa_rg" {
-  description = "ODAA RG for User 02"
-  value       = module.user_odaa_02.resource_group_name
-}
-
-output "ssh_command_user02" {
-  description = "SSH command to connect to User 02 VM"
-  value       = module.user_vm_02.public_ip_address != null ? "az ssh vm --ip ${module.user_vm_02.public_ip_address}" : "No public IP"
 }
 
 # ===============================================================================
@@ -117,4 +72,3 @@ output "ssh_private_key" {
   value       = module.shared.ssh_private_key
   sensitive   = true
 }
-

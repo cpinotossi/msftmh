@@ -102,6 +102,17 @@ resource "azurerm_network_interface" "vm" {
     private_ip_address_allocation = "Dynamic"
     public_ip_address_id          = var.create_public_ip ? azurerm_public_ip.vm[0].id : null
   }
+
+  # Explicit depends_on ensures proper destroy ordering:
+  # NIC must be destroyed BEFORE subnet, public IP, and NSG association.
+  # The conditional public_ip_address_id reference may not create a strong
+  # implicit dependency in all cases, and the NSG association must be removed
+  # before Azure fully releases the subnet for NIC deletion.
+  depends_on = [
+    azurerm_subnet.vm,
+    azurerm_public_ip.vm,
+    azurerm_subnet_network_security_group_association.vm,
+  ]
 }
 
 # ===============================================================================
@@ -237,4 +248,13 @@ resource "azurerm_private_dns_zone_virtual_network_link" "odaa" {
   virtual_network_id    = azurerm_virtual_network.vm.id
   registration_enabled  = false
   tags                  = var.tags
+
+  # Explicit depends_on ensures proper destroy ordering:
+  # DNS link must be destroyed BEFORE the DNS zone and the VNet.
+  # The conditional private_dns_zone_name reference (ternary with count)
+  # may not create a strong implicit dependency in all code paths.
+  depends_on = [
+    azurerm_private_dns_zone.odaa,
+    azurerm_virtual_network.vm,
+  ]
 }
