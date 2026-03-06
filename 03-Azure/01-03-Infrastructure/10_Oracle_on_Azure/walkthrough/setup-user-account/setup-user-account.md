@@ -83,7 +83,7 @@ After you successfully logged into the Azure portal a first check could be the v
 
 ![find azure resource group](media/find_resource_group.png)
 
-#### One resource group is required for this Microhack: "rg-odaa-shared"
+#### Two resource groups are required for this Microhack: "rg-odaa-shared" and "rg-vm-[your user number]"
 
 ![see your azure resource group](media/resource_group_list.png)
 
@@ -91,10 +91,9 @@ After you successfully logged into the Azure portal a first check could be the v
 
 It should look similar to this for Resource Group rg-odaa-shared.
 
-<!-- ![see your azure resource group](media/rg_odaa_resources.png)
-
-Should look simiar to this one for Resource Group odaa-user[your user number] -->
+> **Note:** The screenshot below shows the initial deployment state. Additional resources will be provisioned as you progress through the subsequent challenges of this Microhack.
 
 ![see your azure resource group](media/odaa_user_resources.png)
+
  
 [Back to workspace README](../../README.md)

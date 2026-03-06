@@ -79,8 +79,8 @@ You find under the sub-menu Settings the menu Subnets. In the menu Subnets, you 
 ### Network Tab
 
 Choose for the connectivity the Access type: Managed private virtual network IP only.
-Virual Network: vnet-odaa-shared
-Subnet: snet-odaa-delegated
+- Virtual Network: vnet-odaa-shared
+- Subnet: snet-odaa-delegated
 
 ![An image of the Oracle Autonomous database setting is shown here.](media/adb12.png)
 
