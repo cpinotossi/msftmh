@@ -28,9 +28,9 @@ Open your browser and click on your work icon in the upper right corner.
 Login to the Azure portal by calling the URL https://portal.azure.com in the browser window of the new created profile and use the provided credentials you got at the beginning of the Microhack. Following an example of the credential you should got:
 
 ~~~json
-         "user01": [
+         "user02": [
         {
-          "user_principal_name": "user01@cptazure.org",
+          "user_principal_name": "user02@cptazure.org",
           "display_name": "Bruce Wayne",
           "initial_password": <"Assigned Password">
         }

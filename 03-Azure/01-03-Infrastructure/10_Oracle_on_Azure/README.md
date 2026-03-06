@@ -290,9 +290,9 @@ Review the Oracle Database@Azure service offer, the required Azure resource prov
 Walk through the delegated subnet prerequisites, select the assigned resource group, and deploy the Autonomous Database with the standard parameters supplied in the guide. Completion is confirmed when the Oracle database shows a healthy state in the portal. 
 
 
-In total we offer 4 types of Oracle database services in Azure. Information are available under the public link - [Region availabilitly of ODAA](https://apexadb.oracle.com/ords/r/dbexpert/multicloud-capabilities/multicloud-regions?session=412943632928469)
+In total we offer 4 types of Oracle database services in Azure. Information are available under the public link - [Region availability of ODAA](https://apexadb.oracle.com/ords/r/dbexpert/multicloud-capabilities/multicloud-regions?session=412943632928469)
 
-For the microhack we are chosing Autonomous Database because it is a fully Oracle managed Service (PaaS).
+For the microhack we are choosing Autonomous Database because it is a fully Oracle managed Service (PaaS).
 
 
 #### Actions
@@ -426,7 +426,7 @@ flowchart TB
 
 ### Challenge 4: Measure Network Performance to Your Oracle Database@Azure Autonomous Database
 
-Use the deployed tools on the VM machine to connect on the ADB instance. For the SQL latency test use the recommended tools
+Use the deployed tools on the VM machine to connect to the ADB instance. For the SQL latency test use the recommended tools
 
 1. connping
 2. adbping
