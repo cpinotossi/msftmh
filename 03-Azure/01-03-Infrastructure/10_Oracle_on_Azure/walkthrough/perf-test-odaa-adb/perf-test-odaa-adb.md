@@ -27,7 +27,7 @@ Note down the public IP address. You will need it to connect to your VM and run 
 
 ~~~powershell
 # login to VM
-az ssh vm --ip 20.111.17.173
+az ssh vm --ip xxx.xxx.xxx.xxx #replace the IP address with the public IP of your virtual machine.
 ~~~
 
 ![Select Virtual Machine](media/adbperf4.png)
