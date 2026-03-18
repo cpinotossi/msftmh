@@ -19,19 +19,23 @@ Select the vm called "vm-user<USER-NUMBER>" (ex: vm-user02)
 
 ![Select Virtual Machine](media/adbperf2.png)
 
-Note down the public IP address. You will need it to connect to your VM and run the performance tests.
 
-![Select Virtual Machine](media/adbperf3.png)
+Select the "Bastion" under the menue "Connect"
 
-### 🔐 Login to Azure and set the right subscription
+![Select Virtual Machine](media/vm1.jpg)
 
-~~~powershell
-# login to VM
-az ssh vm --ip xxx.xxx.xxx.xxx #replace the IP address with the public IP of your virtual machine.
-~~~
 
-![Select Virtual Machine](media/adbperf4.png)
+Keep the default settings on the Bastion and press the connect button.
 
+![Select Virtual Machine](media/vm2.jpg)
+
+The first time select the "Allow" button to open the connection to the VM machine.
+
+![Select Virtual Machine](media/vm3.jpg)
+
+The connection should be successfully realized in a new opened browser tab.
+
+![Select Virtual Machine](media/vm4.jpg)
 
 ### Copy the TNS of your ADB
 
