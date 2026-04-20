@@ -1,10 +1,19 @@
 # ===============================================================================
 # Provider Configuration - Shared Infrastructure
 # ===============================================================================
+# - azurerm (default): Required for backend state operations
 # - azurerm.gallery: Gallery Subscription (Compute Gallery) — sub-mhcore
 # - azurerm.odaa:    ODAA Subscription (Shared VNet, Anchors) — sub-mhodaa
 # - azapi:           AzAPI provider for Oracle anchors (ODAA sub)
 # ===============================================================================
+
+# ===============================================================================
+# Default Provider (required for backend state operations)
+# ===============================================================================
+
+provider "azurerm" {
+  features {}
+}
 
 # ===============================================================================
 # Gallery Provider (sub-mhcore: Compute Gallery)

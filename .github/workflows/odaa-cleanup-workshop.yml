@@ -141,6 +141,7 @@ jobs:
         run: |
           az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
           echo "ARM_USE_MSI=true" >> $GITHUB_ENV
+          echo "ARM_USE_CLI=false" >> $GITHUB_ENV
 
       - name: Terraform Init
         run: |
@@ -148,7 +149,8 @@ jobs:
             -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE }}" \
             -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
             -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
-            -backend-config="use_azuread_auth=true"
+            -backend-config="use_msi=true" \
+            -backend-config="client_id=$ARM_CLIENT_ID"
 
       - name: Remove User VMs (user_count=0)
         run: terraform apply -auto-approve -var="user_count=0"
