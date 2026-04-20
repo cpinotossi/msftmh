@@ -38,7 +38,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Azure Login
-        run: az login --identity --username $ARM_CLIENT_ID --allow-no-subscriptions
+        run: az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
 
       - name: Reset Users (Passwords + MFA)
         id: reset
