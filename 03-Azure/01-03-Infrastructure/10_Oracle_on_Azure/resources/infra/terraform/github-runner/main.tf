@@ -156,8 +156,10 @@ module "github_runner" {
   use_zone_redundancy = false
 
   # Additional environment variables for Terraform/Azure
+  # Container Apps don't support IMDS (169.254.169.254), so ARM_USE_MSI won't work.
+  # Instead, workflows do: az login --identity --client-id $ARM_CLIENT_ID
+  # Then Terraform uses Azure CLI auth via ARM_USE_CLI=true (set in workflow).
   container_app_environment_variables = [
-    { name = "ARM_USE_MSI", value = "true" },
     { name = "ARM_TENANT_ID", value = var.tenant_id },
     { name = "ARM_CLIENT_ID", value = azurerm_user_assigned_identity.runner.client_id },
     { name = "ARM_SUBSCRIPTION_ID", value = var.sub_mhcore_id },
