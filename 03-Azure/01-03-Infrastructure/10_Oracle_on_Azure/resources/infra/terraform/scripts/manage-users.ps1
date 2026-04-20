@@ -62,6 +62,11 @@ param(
 
     [string]$CredentialsFile,
 
+    [string]$OutputFile,  # Output file for rotated credentials (default: auto-generated)
+
+    [ValidateRange(1, 25)]
+    [int]$UserCount = 0,  # 0 = all users
+
     [ValidateRange(12, 128)]
     [int]$PasswordLength = 16,
 
@@ -77,21 +82,14 @@ $ErrorActionPreference = 'Stop'
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if (-not $CredentialsFile) {
-    # Auto-detect: look relative to script location
+    # Single source of truth: lab-env/user_credentials.json
     $scriptDir = $PSScriptRoot
-    $candidates = @(
-        (Join-Path $scriptDir "..\user_credentials.json"),
-        (Join-Path $scriptDir "..\identity\user_credentials.json")
-    )
-    foreach ($candidate in $candidates) {
-        if (Test-Path $candidate) {
-            $CredentialsFile = (Resolve-Path $candidate).Path
-            break
-        }
+    $CredentialsFile = Join-Path $scriptDir "..\lab-env\user_credentials.json"
+    
+    if (-not (Test-Path $CredentialsFile)) {
+        throw "user_credentials.json not found at: $CredentialsFile`nRun identity/ terraform first to create users."
     }
-    if (-not $CredentialsFile) {
-        throw "user_credentials.json not found. Searched:`n  $($candidates -join "`n  ")`nUse -CredentialsFile to specify the path."
-    }
+    $CredentialsFile = (Resolve-Path $CredentialsFile).Path
 }
 
 if (-not (Test-Path $CredentialsFile)) {
@@ -100,10 +98,18 @@ if (-not (Test-Path $CredentialsFile)) {
 
 # Load credentials
 $credentials = Get-Content $CredentialsFile -Raw | ConvertFrom-Json
-$users = $credentials.users.PSObject.Properties
+$allUsers = @($credentials.users.PSObject.Properties)
 
-if ($users.Count -eq 0) {
+if ($allUsers.Count -eq 0) {
     throw "No users found in $CredentialsFile"
+}
+
+# Filter users by UserCount if specified
+if ($UserCount -gt 0) {
+    # Sort by user index (user00, user01, ...) and take first N
+    $users = $allUsers | Sort-Object { [int]($_.Name -replace '\D', '') } | Select-Object -First $UserCount
+} else {
+    $users = $allUsers
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -141,6 +147,46 @@ try {
     Write-Host ""
 } catch {
     throw "Not logged in to Azure CLI. Run 'az login' first."
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Microsoft Graph SDK login for MFA reset
+# ═══════════════════════════════════════════════════════════════════════════════
+
+$doPasswords = $Action -in @('rotate-passwords', 'reset-all')
+$doMfa       = $Action -in @('reset-mfa', 'reset-all')
+
+if ($doMfa) {
+    try {
+        if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Authentication)) {
+            throw "Microsoft.Graph.Authentication module is not installed. Install with: Install-Module Microsoft.Graph -Scope CurrentUser"
+        }
+
+        Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
+
+        $requiredScopes = @()
+        if ($doMfa) {
+            $requiredScopes += 'UserAuthenticationMethod.ReadWrite.All'
+        }
+        $mgContext = Get-MgContext -ErrorAction SilentlyContinue
+        $hasRequiredScopes = $false
+
+        if ($mgContext -and $mgContext.Scopes) {
+            $missingScopes = $requiredScopes | Where-Object { $_ -notin $mgContext.Scopes }
+            $hasRequiredScopes = $missingScopes.Count -eq 0
+        }
+
+        if (-not $hasRequiredScopes) {
+            Write-Host "  Device Code Login fuer Microsoft Graph wird gestartet..." -ForegroundColor Yellow
+            Write-Host "  Falls angezeigt: Code im Browser auf https://microsoft.com/devicelogin eingeben." -ForegroundColor Yellow
+            Connect-MgGraph -Scopes $requiredScopes -UseDeviceCode -ContextScope Process | Out-Null
+        }
+
+        Write-Host "  Microsoft Graph context ready" -ForegroundColor Green
+        Write-Host ""
+    } catch {
+        throw "Unable to initialize Microsoft Graph context. $($_.Exception.Message)"
+    }
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -191,16 +237,8 @@ function Reset-UserMfa {
     param([string]$Upn)
 
     try {
-        $methodsJson = az rest --method GET `
-            --uri "https://graph.microsoft.com/v1.0/users/$Upn/authentication/methods" `
-            --output json 2>&1
-
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "    ERROR: Failed to get auth methods" -ForegroundColor Red
-            return $false
-        }
-
-        $methods = $methodsJson | ConvertFrom-Json
+        $encodedUpn = [System.Uri]::EscapeDataString($Upn)
+        $methods = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$encodedUpn/authentication/methods"
         $mfaMethods = $methods.value | Where-Object {
             $_.'@odata.type' -ne '#microsoft.graph.passwordAuthenticationMethod'
         }
@@ -229,11 +267,11 @@ function Reset-UserMfa {
 
             if ($deleteUri) {
                 if (-not $WhatIfPreference) {
-                    az rest --method DELETE --uri $deleteUri 2>&1 | Out-Null
-                    if ($LASTEXITCODE -eq 0) {
+                    try {
+                        Invoke-MgGraphRequest -Method DELETE -Uri $deleteUri | Out-Null
                         Write-Host "    Removed: $methodType" -ForegroundColor Green
-                    } else {
-                        Write-Host "    Failed to remove: $methodType" -ForegroundColor Red
+                    } catch {
+                        Write-Host "    Failed to remove: $methodType - $($_.Exception.Message)" -ForegroundColor Red
                     }
                 } else {
                     Write-Host "    [WhatIf] Would remove: $methodType" -ForegroundColor DarkYellow
@@ -242,7 +280,7 @@ function Reset-UserMfa {
         }
         return $true
     } catch {
-        Write-Host "    ERROR: $_" -ForegroundColor Red
+        Write-Host "    ERROR: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
 }
@@ -250,9 +288,6 @@ function Reset-UserMfa {
 # ═══════════════════════════════════════════════════════════════════════════════
 # Main Processing Loop
 # ═══════════════════════════════════════════════════════════════════════════════
-
-$doPasswords = $Action -in @('rotate-passwords', 'reset-all')
-$doMfa       = $Action -in @('reset-mfa', 'reset-all')
 
 $stats = @{
     PasswordSuccess = 0; PasswordError = 0
@@ -285,15 +320,12 @@ foreach ($userProp in $users) {
                         forceChangePasswordNextSignIn = $ForceChangeOnLogin
                     }
                 }
-                $bodyFile = [System.IO.Path]::GetTempFileName()
-                $bodyObj | ConvertTo-Json -Depth 5 | Set-Content $bodyFile -Encoding UTF8
-                $result = az rest --method PATCH `
-                    --uri "https://graph.microsoft.com/v1.0/users/$upn" `
-                    --body "@$bodyFile" `
-                    --headers "Content-Type=application/json" 2>&1
-                $exitCode = $LASTEXITCODE
-                Remove-Item $bodyFile -Force -ErrorAction SilentlyContinue
-                if ($exitCode -eq 0) {
+                $tempPassword = $newPwd.Replace('"', '\"')
+                $result = az ad user update `
+                    --id $upn `
+                    --password "$tempPassword" `
+                    --force-change-password-next-sign-in $ForceChangeOnLogin 2>&1
+                if ($LASTEXITCODE -eq 0) {
                     Write-Host "    Password rotated" -ForegroundColor Green
                     $newPasswords[$userKey] = $newPwd
                     $stats.PasswordSuccess++
@@ -302,7 +334,7 @@ foreach ($userProp in $users) {
                     $stats.PasswordError++
                 }
             } catch {
-                Write-Host "    ERROR: $_" -ForegroundColor Red
+                Write-Host "    ERROR: Password update failed - $($_.Exception.Message)" -ForegroundColor Red
                 $stats.PasswordError++
             }
         }
@@ -320,24 +352,36 @@ foreach ($userProp in $users) {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Update user_credentials.json with new passwords
+# Write output file with rotated passwords (input file remains unchanged)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if ($doPasswords -and $newPasswords.Count -gt 0 -and -not $WhatIfPreference) {
+    # Create a copy for output
+    $output = $credentials | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+    
     foreach ($userKey in $newPasswords.Keys) {
-        $credentials.users.$userKey.password = $newPasswords[$userKey]
+        $output.users.$userKey.password = $newPasswords[$userKey]
     }
 
     # Update metadata
-    $credentials.generated_at = (Get-Date -Format "o")
+    $output.generated_at = (Get-Date -Format "o")
     if ($EventName) {
-        $credentials | Add-Member -NotePropertyName "last_event" -NotePropertyValue $EventName -Force
+        $output | Add-Member -NotePropertyName "event_name" -NotePropertyValue $EventName -Force
     }
-    $credentials | Add-Member -NotePropertyName "last_action" -NotePropertyValue $Action -Force
+    $output | Add-Member -NotePropertyName "last_action" -NotePropertyValue $Action -Force
 
-    $credentials | ConvertTo-Json -Depth 10 | Set-Content $CredentialsFile -Encoding UTF8
+    # Determine output file path
+    if (-not $OutputFile) {
+        $baseName = [System.IO.Path]::GetFileNameWithoutExtension($CredentialsFile)
+        $dir = [System.IO.Path]::GetDirectoryName($CredentialsFile)
+        $timestamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
+        $OutputFile = Join-Path $dir "${baseName}_${timestamp}.json"
+    }
+
+    $output | ConvertTo-Json -Depth 10 | Set-Content $OutputFile -Encoding UTF8
     Write-Host ""
-    Write-Host "  ✓ Updated $CredentialsFile" -ForegroundColor Green
+    Write-Host "  ✓ Created $OutputFile" -ForegroundColor Green
+    Write-Host "  ✓ Input file unchanged: $CredentialsFile" -ForegroundColor Gray
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -382,7 +426,7 @@ if ($stats.PasswordError -gt 0 -or $stats.MfaError -gt 0) {
 
     if ($stats.MfaError -gt 0) {
         Write-Host "  MFA reset requires:" -ForegroundColor Yellow
-        Write-Host "    - UserAuthenticationMethod.ReadWrite.All permission on service principal" -ForegroundColor White
+        Write-Host "    - UserAuthenticationMethod.ReadWrite.All delegated Graph scope" -ForegroundColor White
         Write-Host "    - Or run as Authentication Administrator" -ForegroundColor White
     }
     if ($stats.PasswordError -gt 0) {
