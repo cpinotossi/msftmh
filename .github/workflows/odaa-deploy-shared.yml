@@ -86,8 +86,6 @@ jobs:
           echo "IDENTITY_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
 
       - name: Terraform Init
-        env:
-          TF_LOG: DEBUG
         run: |
           terraform init \
             -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE }}" \

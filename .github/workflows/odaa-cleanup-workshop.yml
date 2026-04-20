@@ -29,7 +29,7 @@ env:
   TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/users'
   SCRIPTS_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/scripts'
   CREDS_FILE: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/user_credentials.json'
-  TF_VERSION: '1.9.8'
+  TF_VERSION: '1.13.4'
 
 jobs:
   validate:
@@ -142,8 +142,43 @@ jobs:
           az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
           echo "ARM_USE_MSI=true" >> $GITHUB_ENV
           echo "ARM_USE_CLI=false" >> $GITHUB_ENV
-          # Hide az CLI SP session from terraform backend (it hardcodes SupportsAzureCliToken=true)
+          echo "ARM_TENANT_ID=$(az account show --query tenantId -o tsv)" >> $GITHUB_ENV
           echo "AZURE_CONFIG_DIR=$(mktemp -d)" >> $GITHUB_ENV
+
+      - name: Start MSI Proxy
+        run: |
+          cat > /tmp/msi-proxy.py << 'PROXY'
+          import http.server, urllib.request, os, re
+          class H(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  q = self.path.find('?')
+                  qs = self.path[q:] if q >= 0 else ''
+                  qs = re.sub(r'api-version=[^&]+', 'api-version=2019-08-01', qs)
+                  url = os.environ['IDENTITY_ENDPOINT'] + qs
+                  req = urllib.request.Request(url)
+                  req.add_header('X-IDENTITY-HEADER', os.environ['IDENTITY_HEADER'])
+                  try:
+                      with urllib.request.urlopen(req) as resp:
+                          body = resp.read()
+                          self.send_response(200)
+                          self.send_header('Content-Type', 'application/json')
+                          self.end_headers()
+                          self.wfile.write(body)
+                  except urllib.error.HTTPError as e:
+                      body = e.read()
+                      self.send_response(e.code)
+                      self.send_header('Content-Type', 'application/json')
+                      self.end_headers()
+                      self.wfile.write(body)
+              def log_message(self, *a): pass
+          http.server.HTTPServer(('127.0.0.1', 54321), H).serve_forever()
+          PROXY
+          python3 /tmp/msi-proxy.py &
+          sleep 1
+          curl -sf "http://127.0.0.1:54321/msi/token?api-version=2019-08-01&resource=https://management.azure.com&client_id=$ARM_CLIENT_ID" | python3 -c "import sys,json; t=json.load(sys.stdin); print('MSI proxy OK, token type:', t.get('token_type','?'))"
+          echo "MSI_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
+          echo "ARM_MSI_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
+          echo "IDENTITY_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
 
       - name: Terraform Init
         run: |
@@ -152,7 +187,11 @@ jobs:
             -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
             -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
             -backend-config="use_msi=true" \
-            -backend-config="client_id=$ARM_CLIENT_ID"
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="client_id=$ARM_CLIENT_ID" \
+            -backend-config="msi_endpoint=http://127.0.0.1:54321/msi/token" \
+            -backend-config="subscription_id=${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
+            -backend-config="tenant_id=$ARM_TENANT_ID"
 
       - name: Remove User VMs (user_count=0)
         run: terraform apply -auto-approve -var="user_count=0"
