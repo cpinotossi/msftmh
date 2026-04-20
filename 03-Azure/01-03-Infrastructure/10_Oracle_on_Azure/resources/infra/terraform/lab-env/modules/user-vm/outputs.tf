@@ -69,10 +69,10 @@ output "dns_zone_name" {
 
 output "dns_zone_resource_group" {
   description = "Resource group of the Private DNS Zone (if created/linked)"
-  value       = var.create_dns_link ? (var.dns_zone_resource_group != null && var.dns_zone_resource_group != "" && trimspace(var.dns_zone_resource_group) != "" ? var.dns_zone_resource_group : azurerm_resource_group.vm.name) : null
+  value       = var.create_dns_link ? (try(trimspace(var.dns_zone_resource_group), "") != "" ? var.dns_zone_resource_group : azurerm_resource_group.vm.name) : null
 }
 
 output "dns_zone_id" {
   description = "Private DNS Zone ID (only when created in this module)"
-  value       = var.create_dns_link && (var.dns_zone_resource_group == null || var.dns_zone_resource_group == "" || trimspace(var.dns_zone_resource_group) == "") ? azurerm_private_dns_zone.odaa[0].id : null
+  value       = var.create_dns_link && try(trimspace(var.dns_zone_resource_group), "") == "" ? azurerm_private_dns_zone.odaa[0].id : null
 }
