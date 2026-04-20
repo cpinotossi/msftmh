@@ -12,6 +12,7 @@
 # ===============================================================================
 
 provider "azurerm" {
+  use_cli = false
   features {}
 }
 
@@ -22,6 +23,7 @@ provider "azurerm" {
 provider "azurerm" {
   alias           = "gallery"
   subscription_id = var.gallery_subscription_id
+  use_cli         = false
 
   features {
     resource_group {
@@ -37,6 +39,7 @@ provider "azurerm" {
 provider "azurerm" {
   alias           = "odaa"
   subscription_id = var.odaa_subscription_id
+  use_cli         = false
 
   features {
     resource_group {
