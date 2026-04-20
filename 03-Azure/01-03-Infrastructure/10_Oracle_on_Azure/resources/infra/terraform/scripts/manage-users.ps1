@@ -150,42 +150,63 @@ try {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Microsoft Graph SDK login for MFA reset
+# Graph API Token via Azure CLI (works with Managed Identity)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 $doPasswords = $Action -in @('rotate-passwords', 'reset-all')
 $doMfa       = $Action -in @('reset-mfa', 'reset-all')
 
+# Global variable for Graph API token
+$script:graphToken = $null
+
+function Get-GraphToken {
+    if (-not $script:graphToken) {
+        try {
+            $script:graphToken = az account get-access-token --resource https://graph.microsoft.com --query accessToken -o tsv 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to get Graph API token: $script:graphToken"
+            }
+            Write-Host "  Graph API token acquired via Azure CLI" -ForegroundColor Green
+        } catch {
+            throw "Unable to acquire Graph API token. Ensure az login is done and has Graph API permissions. $($_.Exception.Message)"
+        }
+    }
+    return $script:graphToken
+}
+
+function Invoke-GraphApi {
+    param(
+        [string]$Method,
+        [string]$Uri,
+        [object]$Body = $null
+    )
+    
+    $token = Get-GraphToken
+    $headers = @{
+        'Authorization' = "Bearer $token"
+        'Content-Type'  = 'application/json'
+    }
+    
+    $params = @{
+        Method  = $Method
+        Uri     = $Uri
+        Headers = $headers
+    }
+    
+    if ($Body) {
+        $params['Body'] = ($Body | ConvertTo-Json -Depth 10)
+    }
+    
+    return Invoke-RestMethod @params
+}
+
 if ($doMfa) {
+    # Pre-acquire token to validate permissions
     try {
-        if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Authentication)) {
-            throw "Microsoft.Graph.Authentication module is not installed. Install with: Install-Module Microsoft.Graph -Scope CurrentUser"
-        }
-
-        Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
-
-        $requiredScopes = @()
-        if ($doMfa) {
-            $requiredScopes += 'UserAuthenticationMethod.ReadWrite.All'
-        }
-        $mgContext = Get-MgContext -ErrorAction SilentlyContinue
-        $hasRequiredScopes = $false
-
-        if ($mgContext -and $mgContext.Scopes) {
-            $missingScopes = $requiredScopes | Where-Object { $_ -notin $mgContext.Scopes }
-            $hasRequiredScopes = $missingScopes.Count -eq 0
-        }
-
-        if (-not $hasRequiredScopes) {
-            Write-Host "  Device Code Login fuer Microsoft Graph wird gestartet..." -ForegroundColor Yellow
-            Write-Host "  Falls angezeigt: Code im Browser auf https://microsoft.com/devicelogin eingeben." -ForegroundColor Yellow
-            Connect-MgGraph -Scopes $requiredScopes -UseDeviceCode -ContextScope Process | Out-Null
-        }
-
-        Write-Host "  Microsoft Graph context ready" -ForegroundColor Green
+        $null = Get-GraphToken
         Write-Host ""
     } catch {
-        throw "Unable to initialize Microsoft Graph context. $($_.Exception.Message)"
+        throw "MFA reset requires Graph API access. $($_.Exception.Message)"
     }
 }
 
@@ -238,7 +259,7 @@ function Reset-UserMfa {
 
     try {
         $encodedUpn = [System.Uri]::EscapeDataString($Upn)
-        $methods = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$encodedUpn/authentication/methods"
+        $methods = Invoke-GraphApi -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$encodedUpn/authentication/methods"
         $mfaMethods = $methods.value | Where-Object {
             $_.'@odata.type' -ne '#microsoft.graph.passwordAuthenticationMethod'
         }
@@ -255,20 +276,20 @@ function Reset-UserMfa {
             $methodId = $method.id
 
             $deleteUri = switch ($methodType) {
-                "phoneAuthenticationMethod"                    { "https://graph.microsoft.com/v1.0/users/$Upn/authentication/phoneMethods/$methodId" }
-                "microsoftAuthenticatorAuthenticationMethod"   { "https://graph.microsoft.com/v1.0/users/$Upn/authentication/microsoftAuthenticatorMethods/$methodId" }
-                "softwareOathAuthenticationMethod"             { "https://graph.microsoft.com/v1.0/users/$Upn/authentication/softwareOathMethods/$methodId" }
-                "fido2AuthenticationMethod"                    { "https://graph.microsoft.com/v1.0/users/$Upn/authentication/fido2Methods/$methodId" }
-                "windowsHelloForBusinessAuthenticationMethod"  { "https://graph.microsoft.com/v1.0/users/$Upn/authentication/windowsHelloForBusinessMethods/$methodId" }
-                "emailAuthenticationMethod"                    { "https://graph.microsoft.com/v1.0/users/$Upn/authentication/emailMethods/$methodId" }
-                "temporaryAccessPassAuthenticationMethod"      { "https://graph.microsoft.com/v1.0/users/$Upn/authentication/temporaryAccessPassMethods/$methodId" }
+                "phoneAuthenticationMethod"                    { "https://graph.microsoft.com/v1.0/users/$encodedUpn/authentication/phoneMethods/$methodId" }
+                "microsoftAuthenticatorAuthenticationMethod"   { "https://graph.microsoft.com/v1.0/users/$encodedUpn/authentication/microsoftAuthenticatorMethods/$methodId" }
+                "softwareOathAuthenticationMethod"             { "https://graph.microsoft.com/v1.0/users/$encodedUpn/authentication/softwareOathMethods/$methodId" }
+                "fido2AuthenticationMethod"                    { "https://graph.microsoft.com/v1.0/users/$encodedUpn/authentication/fido2Methods/$methodId" }
+                "windowsHelloForBusinessAuthenticationMethod"  { "https://graph.microsoft.com/v1.0/users/$encodedUpn/authentication/windowsHelloForBusinessMethods/$methodId" }
+                "emailAuthenticationMethod"                    { "https://graph.microsoft.com/v1.0/users/$encodedUpn/authentication/emailMethods/$methodId" }
+                "temporaryAccessPassAuthenticationMethod"      { "https://graph.microsoft.com/v1.0/users/$encodedUpn/authentication/temporaryAccessPassMethods/$methodId" }
                 default { $null }
             }
 
             if ($deleteUri) {
                 if (-not $WhatIfPreference) {
                     try {
-                        Invoke-MgGraphRequest -Method DELETE -Uri $deleteUri | Out-Null
+                        Invoke-GraphApi -Method DELETE -Uri $deleteUri | Out-Null
                         Write-Host "    Removed: $methodType" -ForegroundColor Green
                     } catch {
                         Write-Host "    Failed to remove: $methodType - $($_.Exception.Message)" -ForegroundColor Red

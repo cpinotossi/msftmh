@@ -57,9 +57,9 @@ jobs:
           $timestamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
           $outputFile = Join-Path (Split-Path $credsFile) "user_credentials_${timestamp}.json"
           
-          # Note: Using rotate-passwords only (MFA reset requires Microsoft.Graph module)
+          # Reset passwords AND MFA (uses Graph API directly via Azure CLI token)
           ./manage-users.ps1 `
-            -Action "rotate-passwords" `
+            -Action "reset-all" `
             -CredentialsFile $credsFile `
             -OutputFile $outputFile
           
@@ -80,10 +80,14 @@ jobs:
           $users = $creds.users.PSObject.Properties | Sort-Object { [int]($_.Name -replace '\D', '') }
           
           @"
-          ## ✅ Password Rotation Complete
+          ## ✅ Password + MFA Reset Complete
           
           **Date:** $(Get-Date -Format 'yyyy-MM-dd HH:mm')
           **Users updated:** $($users.Count)
+          
+          ### What was done
+          - ✅ Passwords rotated (new random passwords)
+          - ✅ MFA registrations cleared (Authenticator app, etc.)
           
           ### Next Steps
           1. Download artifact below
