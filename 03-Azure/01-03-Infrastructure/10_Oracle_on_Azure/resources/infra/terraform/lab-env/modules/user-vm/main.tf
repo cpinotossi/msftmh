@@ -301,7 +301,7 @@ resource "azurerm_role_assignment" "vm_admin_login" {
 # ===============================================================================
 
 locals {
-  use_existing_dns_zone = var.dns_zone_resource_group != null && trimspace(var.dns_zone_resource_group) != ""
+  use_existing_dns_zone = var.dns_zone_resource_group != null && trimspace(coalesce(var.dns_zone_resource_group, "")) != ""
 }
 
 resource "azurerm_private_dns_zone" "odaa" {

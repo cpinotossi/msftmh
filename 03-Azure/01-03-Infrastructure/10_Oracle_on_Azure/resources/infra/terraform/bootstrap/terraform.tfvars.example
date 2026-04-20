@@ -1,0 +1,26 @@
+tenant_id                  = "00000000-0000-0000-0000-000000000000"
+bootstrap_subscription_id  = "00000000-0000-0000-0000-000000000000"
+location                   = "francecentral"
+name_prefix                = "oraworkshop"
+
+github_org                 = "your-org"
+github_repo                = "your-repo"
+github_branch              = "main"
+github_environment         = ""
+
+# Existing app registration client ID currently used by your Terraform stack
+existing_sp_client_id      = "00000000-0000-0000-0000-000000000000"
+
+create_container_apps_job  = true
+container_image            = "mcr.microsoft.com/azure-cli:2.66.0"
+container_cpu              = 1
+container_memory           = "2Gi"
+
+create_key_vault           = true
+key_vault_name             = ""
+
+tags = {
+  Project     = "OracleWorkshop"
+  ManagedBy   = "Terraform"
+  Environment = "Bootstrap"
+}

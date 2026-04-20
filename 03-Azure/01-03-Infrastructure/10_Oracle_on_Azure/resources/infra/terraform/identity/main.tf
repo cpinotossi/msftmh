@@ -67,13 +67,13 @@ module "entra_id_users" {
 # - Main infrastructure Terraform (reads object IDs for RBAC)
 # - Event organizers (distribute credentials to participants)
 #
-# Output location: terraform/user_credentials.json (parent folder, not identity/)
+# Output location: terraform/lab-env/user_credentials.json
 # ===============================================================================
 
 locals {
-  # Output to parent folder (terraform root) for easy access
-  # path.root is identity/, so we go up one level
-  user_credentials_output_path = "${path.root}/../user_credentials.json"
+  # Output to lab-env folder where the workshop configuration lives
+  # path.root is identity/, so we go up one level then into lab-env/
+  user_credentials_output_path = "${path.root}/../lab-env/user_credentials.json"
 }
 
 resource "local_file" "user_credentials" {

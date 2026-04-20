@@ -41,7 +41,10 @@ jobs:
           terraform version
 
       - name: Azure Login
-        run: az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
+        run: |
+          az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
+          # Export for Terraform to use Azure CLI authentication
+          echo "ARM_USE_CLI=true" >> $GITHUB_ENV
 
       - name: Terraform Init
         run: |
