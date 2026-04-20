@@ -51,7 +51,7 @@ jobs:
     
     steps:
       - name: Azure Login
-        run: az login --identity --allow-no-subscriptions
+        run: az login --identity --username $ARM_CLIENT_ID --allow-no-subscriptions
 
       - name: Check for Oracle Databases
         run: |
@@ -94,7 +94,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Azure Login
-        run: az login --identity --allow-no-subscriptions
+        run: az login --identity --username $ARM_CLIENT_ID --allow-no-subscriptions
 
       - name: Rotate Passwords
         shell: pwsh
@@ -129,7 +129,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Azure Login
-        run: az login --identity --allow-no-subscriptions
+        run: az login --identity --username $ARM_CLIENT_ID --allow-no-subscriptions
 
       - name: Terraform Init
         run: |
