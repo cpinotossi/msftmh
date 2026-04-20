@@ -12,6 +12,14 @@ name: 4 - Terraform Import
 on:
   workflow_dispatch:
     inputs:
+      project:
+        description: 'Target project directory (shared or users)'
+        required: true
+        type: choice
+        options:
+          - shared
+          - users
+        default: 'shared'
       import_file:
         description: 'Path to import list file in repo (e.g. lab-env/import-list.txt). Overrides imports input.'
         required: false
@@ -29,11 +37,11 @@ on:
         default: true
 
 concurrency:
-  group: workshop
+  group: workshop-${{ inputs.project }}
   cancel-in-progress: false
 
 env:
-  TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env'
+  TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/${{ inputs.project }}'
   TF_VERSION: '1.9.8'
 
 jobs:
@@ -70,8 +78,7 @@ jobs:
             -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE }}" \
             -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
             -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
-            -backend-config="key=workshop.tfstate" \
-            -backend-config="use_msi=true"
+            -backend-config="use_azuread_auth=true"
 
       - name: Parse & Import Resources
         env:

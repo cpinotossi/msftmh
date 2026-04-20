@@ -25,6 +25,12 @@ variable "image_name" {
   default     = "oracle-workshop-vm"
 }
 
+variable "create_ssh_key" {
+  description = "Create SSH key pair (set false when SSH is managed elsewhere)"
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)

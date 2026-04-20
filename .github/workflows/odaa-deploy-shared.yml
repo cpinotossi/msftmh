@@ -1,26 +1,20 @@
-# Deploy Oracle Workshop Users - Triggered by users/terraform.tfvars commit
-# Edit user_count in users/terraform.tfvars and push to deploy
-# Prerequisites: Shared infrastructure must be deployed first (workflow 1)
-name: 2 - Deploy Workshop
+# Deploy Shared Infrastructure - Compute Gallery, ODAA VNets, Role Definition
+# Run once before deploying users. Rarely needs re-running.
+name: 1 - Deploy Shared
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/users/terraform.tfvars'
 
 concurrency:
-  group: workshop-users
+  group: workshop-shared
   cancel-in-progress: false
 
 env:
-  TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/users'
+  TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/shared'
   TF_VERSION: '1.9.8'
 
 jobs:
-  deploy:
+  deploy-shared:
     runs-on: [self-hosted, azure, container-apps, terraform]
     defaults:
       run:
@@ -44,7 +38,6 @@ jobs:
       - name: Azure Login
         run: |
           az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
-          # Override MSI flag - Container Apps don't have IMDS, use CLI auth instead
           echo "ARM_USE_MSI=false" >> $GITHUB_ENV
           echo "ARM_USE_CLI=true" >> $GITHUB_ENV
 
@@ -58,10 +51,10 @@ jobs:
 
       - name: Terraform Apply
         run: terraform apply -auto-approve
-      
+
       - name: Summary
         run: |
-          echo "## ✅ Workshop Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Shared Infrastructure Deployed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Terraform Outputs" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

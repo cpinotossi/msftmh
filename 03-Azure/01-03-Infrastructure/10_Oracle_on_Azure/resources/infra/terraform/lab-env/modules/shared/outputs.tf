@@ -34,11 +34,11 @@ output "image_name" {
 
 output "ssh_public_key" {
   description = "SSH public key for VM access (auto-generated)"
-  value       = tls_private_key.workshop.public_key_openssh
+  value       = var.create_ssh_key ? tls_private_key.workshop[0].public_key_openssh : null
 }
 
 output "ssh_private_key" {
   description = "SSH private key for admin emergency access (sensitive)"
-  value       = tls_private_key.workshop.private_key_pem
+  value       = var.create_ssh_key ? tls_private_key.workshop[0].private_key_pem : null
   sensitive   = true
 }

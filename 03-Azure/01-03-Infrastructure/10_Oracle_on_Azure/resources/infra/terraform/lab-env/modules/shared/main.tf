@@ -36,15 +36,17 @@ resource "azurerm_shared_image_gallery" "gallery" {
 # ===============================================================================
 
 resource "tls_private_key" "workshop" {
+  count     = var.create_ssh_key ? 1 : 0
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
 resource "azurerm_ssh_public_key" "workshop" {
+  count               = var.create_ssh_key ? 1 : 0
   name                = "ssh-workshop-admin"
   resource_group_name = azurerm_resource_group.shared.name
   location            = azurerm_resource_group.shared.location
-  public_key          = tls_private_key.workshop.public_key_openssh
+  public_key          = tls_private_key.workshop[0].public_key_openssh
   tags                = var.tags
 }
 
