@@ -1,0 +1,87 @@
+# Reset Workshop Users - Run before each workshop event
+#
+# This workflow:
+# - Rotates passwords for ALL 25 users
+# - Clears MFA registrations (Authenticator app, etc.)
+# - Exports updated user_credentials.json as artifact
+#
+# PREREQUISITES:
+# - Password Administrator role in Entra ID
+# - Authentication Administrator role (for MFA reset)
+#
+name: 1 - Reset Users
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: workshop
+  cancel-in-progress: false
+
+env:
+  SCRIPTS_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/scripts'
+  CREDS_FILE: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/user_credentials.json'
+
+jobs:
+  rotate:
+    runs-on: [self-hosted, azure, container-apps, terraform]
+    
+    defaults:
+      run:
+        working-directory: ${{ env.SCRIPTS_DIR }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform
+          sparse-checkout-cone-mode: false
+
+      - name: Azure Login
+        run: az login --identity --allow-no-subscriptions
+
+      - name: Reset Users (Passwords + MFA)
+        id: reset
+        shell: pwsh
+        run: |
+          $credsFile = Join-Path $env:GITHUB_WORKSPACE "${{ env.CREDS_FILE }}"
+          $timestamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
+          $outputFile = Join-Path (Split-Path $credsFile) "user_credentials_${timestamp}.json"
+          
+          ./manage-users.ps1 `
+            -Action "reset-all" `
+            -CredentialsFile $credsFile `
+            -OutputFile $outputFile
+          
+          "OUTPUT_FILE=$outputFile" >> $env:GITHUB_OUTPUT
+
+      - name: Upload User Credentials
+        uses: actions/upload-artifact@v4
+        with:
+          name: user-credentials-${{ github.run_id }}
+          path: ${{ steps.reset.outputs.OUTPUT_FILE }}
+          retention-days: 90
+
+      - name: Summary
+        shell: pwsh
+        run: |
+          $outputFile = "${{ steps.reset.outputs.OUTPUT_FILE }}"
+          $creds = Get-Content $outputFile | ConvertFrom-Json
+          $users = $creds.users.PSObject.Properties | Sort-Object { [int]($_.Name -replace '\D', '') }
+          
+          @"
+          ## ✅ Password Rotation Complete
+          
+          **Date:** $(Get-Date -Format 'yyyy-MM-dd HH:mm')
+          **Users updated:** $($users.Count)
+          
+          ### Next Steps
+          1. Download artifact below
+          2. Distribute credentials to participants (only for users you need)
+          3. Run **2 - Deploy Workshop** workflow with your user_count
+          
+          ### User List
+          | User | Display Name |
+          |------|--------------|
+          $($users | ForEach-Object { "| $($_.Name) | $($_.Value.display_name) |" } | Out-String)
+          "@ >> $env:GITHUB_STEP_SUMMARY

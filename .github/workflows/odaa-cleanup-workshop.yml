@@ -1,0 +1,156 @@
+# Cleanup Workshop - Run after workshop ends
+#
+# This workflow:
+# 1. Rotates ALL passwords (invalidates old credentials)
+# 2. Removes user VMs by setting user_count=0 (shared resources remain)
+#
+# IMPORTANT: Delete all Oracle databases manually BEFORE running!
+#
+name: 3 - Cleanup Workshop
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "CLEANUP" to confirm'
+        required: true
+        type: string
+      skip_oracle_check:
+        description: 'Skip Oracle database check (use with caution!)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: workshop
+  cancel-in-progress: false
+
+env:
+  TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env'
+  SCRIPTS_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/scripts'
+  CREDS_FILE: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/user_credentials.json'
+
+jobs:
+  validate:
+    name: Validate Confirmation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirmation }}" != "CLEANUP" ]; then
+            echo "::error::You must type 'CLEANUP' to confirm. Aborting."
+            exit 1
+          fi
+          echo "✅ Cleanup confirmed"
+
+  check-oracle:
+    name: Check Oracle Databases
+    needs: validate
+    runs-on: [self-hosted, azure, container-apps, terraform]
+    if: ${{ github.event.inputs.skip_oracle_check != 'true' }}
+    
+    steps:
+      - name: Azure Login
+        run: az login --identity --allow-no-subscriptions
+
+      - name: Check for Oracle Databases
+        run: |
+          echo "Checking for Oracle Autonomous Databases..."
+          
+          ODAA_RGS=$(az group list --query "[?starts_with(name, 'rg-odaa-')].name" -o tsv)
+          
+          DATABASES_FOUND=false
+          for RG in $ODAA_RGS; do
+            echo "Checking resource group: $RG"
+            DBS=$(az oracle autonomous-database list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null || true)
+            if [ -n "$DBS" ]; then
+              echo "::error::Found Oracle databases in $RG: $DBS"
+              DATABASES_FOUND=true
+            fi
+          done
+          
+          if [ "$DATABASES_FOUND" = true ]; then
+            echo "::error::Please delete all Oracle databases before cleanup!"
+            exit 1
+          fi
+          
+          echo "✅ No Oracle databases found"
+
+  rotate-passwords:
+    name: Rotate Passwords (Invalidate)
+    needs: [validate, check-oracle]
+    if: always() && needs.validate.result == 'success' && (needs.check-oracle.result == 'success' || needs.check-oracle.result == 'skipped')
+    runs-on: [self-hosted, azure, container-apps, terraform]
+    
+    defaults:
+      run:
+        working-directory: ${{ env.SCRIPTS_DIR }}
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform
+          sparse-checkout-cone-mode: false
+
+      - name: Azure Login
+        run: az login --identity --allow-no-subscriptions
+
+      - name: Rotate Passwords
+        shell: pwsh
+        run: |
+          $credsFile = Join-Path $env:GITHUB_WORKSPACE "${{ env.CREDS_FILE }}"
+          ./manage-users.ps1 `
+            -Action "rotate-passwords" `
+            -CredentialsFile $credsFile `
+            -EventName "cleanup-$(Get-Date -Format 'yyyy-MM-dd')"
+
+  # Note: MFA reset requires Microsoft Graph API permissions that 
+  # Managed Identity doesn't support well. Skip for now or run manually.
+  # reset-mfa:
+  #   name: Reset MFA
+  #   needs: rotate-passwords
+  #   ...
+
+  destroy:
+    name: Destroy Infrastructure
+    needs: rotate-passwords
+    runs-on: [self-hosted, azure, container-apps, terraform]
+    
+    defaults:
+      run:
+        working-directory: ${{ env.TF_DIR }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform
+          sparse-checkout-cone-mode: false
+
+      - name: Azure Login
+        run: az login --identity --allow-no-subscriptions
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
+            -backend-config="key=workshop.tfstate" \
+            -backend-config="use_msi=true"
+
+      - name: Remove User VMs (user_count=0)
+        run: terraform apply -auto-approve -var="user_count=0"
+
+      - name: Summary
+        run: |
+          echo "## ✅ Workshop Cleanup Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Actions Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ All passwords rotated (old credentials invalidated)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ User VMs removed (user_count=0)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Shared resources preserved (Compute Gallery, ODAA VNet, etc.)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Manual Steps Required" >> $GITHUB_STEP_SUMMARY
+          echo "- ⚠️ Reset MFA manually if needed (Portal → Users → Authentication methods)" >> $GITHUB_STEP_SUMMARY

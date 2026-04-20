@@ -1,0 +1,55 @@
+# Deploy Oracle Workshop - Triggered by terraform.tfvars commit
+# Edit user_count in terraform.tfvars and push to deploy
+name: 2 - Deploy Workshop
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/terraform.tfvars'
+
+concurrency:
+  group: workshop
+  cancel-in-progress: false
+
+env:
+  TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env'
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, azure, container-apps, terraform]
+    defaults:
+      run:
+        working-directory: ${{ env.TF_DIR }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform
+          sparse-checkout-cone-mode: false
+
+      - name: Azure Login
+        run: az login --identity --allow-no-subscriptions
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
+            -backend-config="key=workshop.tfstate" \
+            -backend-config="use_msi=true"
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+      
+      - name: Summary
+        run: |
+          echo "## ✅ Workshop Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Terraform Outputs" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          terraform output -no-color >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
