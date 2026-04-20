@@ -1,9 +1,8 @@
 # ===============================================================================
 # Provider Configuration - Shared Infrastructure
 # ===============================================================================
-# - azurerm.gallery: Gallery Subscription (Compute Gallery) — sub-mhcore
-# - azurerm.odaa:    ODAA Subscription (Shared VNet, Anchors) — sub-mhodaa
-# - azapi:           AzAPI provider for Oracle anchors (ODAA sub)
+# Auth: Managed Identity (use_msi=true, use_cli=false)
+# CI runner uses Container Apps with user-assigned MI, no IMDS.
 # ===============================================================================
 
 # ===============================================================================
@@ -13,6 +12,8 @@
 provider "azurerm" {
   alias           = "gallery"
   subscription_id = var.gallery_subscription_id
+  use_cli         = false
+  use_msi         = true
 
   features {
     resource_group {
@@ -28,6 +29,8 @@ provider "azurerm" {
 provider "azurerm" {
   alias           = "odaa"
   subscription_id = var.odaa_subscription_id
+  use_cli         = false
+  use_msi         = true
 
   features {
     resource_group {
@@ -42,4 +45,6 @@ provider "azurerm" {
 
 provider "azapi" {
   subscription_id = var.odaa_subscription_id
+  use_cli         = false
+  use_msi         = true
 }
