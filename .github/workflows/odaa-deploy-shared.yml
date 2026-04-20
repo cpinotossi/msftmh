@@ -40,10 +40,26 @@ jobs:
           az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
           echo "ARM_USE_MSI=true" >> $GITHUB_ENV
           echo "ARM_USE_CLI=false" >> $GITHUB_ENV
-          # Hide az CLI SP session from terraform backend (it hardcodes SupportsAzureCliToken=true)
+          # Map Container Apps IDENTITY_ENDPOINT to MSI_ENDPOINT for older go-azure-helpers
+          echo "MSI_ENDPOINT=$IDENTITY_ENDPOINT" >> $GITHUB_ENV
+          echo "ARM_MSI_ENDPOINT=$IDENTITY_ENDPOINT" >> $GITHUB_ENV
+          # Hide az CLI SP session from terraform backend
           echo "AZURE_CONFIG_DIR=$(mktemp -d)" >> $GITHUB_ENV
 
+      - name: Debug Auth Env
+        run: |
+          echo "IDENTITY_ENDPOINT=${IDENTITY_ENDPOINT:-NOT SET}"
+          echo "MSI_ENDPOINT=${MSI_ENDPOINT:-NOT SET}"
+          echo "ARM_MSI_ENDPOINT=${ARM_MSI_ENDPOINT:-NOT SET}"
+          echo "ARM_USE_MSI=$ARM_USE_MSI"
+          echo "ARM_USE_CLI=$ARM_USE_CLI"
+          echo "ARM_CLIENT_ID=${ARM_CLIENT_ID:+SET (hidden)}"
+          echo "AZURE_CONFIG_DIR=$AZURE_CONFIG_DIR"
+          ls -la "$AZURE_CONFIG_DIR" 2>/dev/null || echo "AZURE_CONFIG_DIR empty/missing"
+
       - name: Terraform Init
+        env:
+          TF_LOG: DEBUG
         run: |
           terraform init \
             -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE }}" \
