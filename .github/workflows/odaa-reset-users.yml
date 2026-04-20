@@ -57,8 +57,9 @@ jobs:
           $timestamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
           $outputFile = Join-Path (Split-Path $credsFile) "user_credentials_${timestamp}.json"
           
+          # Note: Using rotate-passwords only (MFA reset requires Microsoft.Graph module)
           ./manage-users.ps1 `
-            -Action "reset-all" `
+            -Action "rotate-passwords" `
             -CredentialsFile $credsFile `
             -OutputFile $outputFile
           
