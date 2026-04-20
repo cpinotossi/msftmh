@@ -40,6 +40,8 @@ jobs:
           az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
           echo "ARM_USE_MSI=true" >> $GITHUB_ENV
           echo "ARM_USE_CLI=false" >> $GITHUB_ENV
+          # Hide az CLI SP session from terraform backend (it hardcodes SupportsAzureCliToken=true)
+          echo "AZURE_CONFIG_DIR=$(mktemp -d)" >> $GITHUB_ENV
 
       - name: Terraform Init
         run: |
