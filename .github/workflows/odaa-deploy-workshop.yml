@@ -3,6 +3,7 @@
 name: 2 - Deploy Workshop
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
