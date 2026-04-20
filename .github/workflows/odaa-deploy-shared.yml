@@ -38,8 +38,8 @@ jobs:
       - name: Azure Login
         run: |
           az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
-          echo "ARM_USE_MSI=false" >> $GITHUB_ENV
-          echo "ARM_USE_CLI=true" >> $GITHUB_ENV
+          echo "ARM_USE_MSI=true" >> $GITHUB_ENV
+          echo "ARM_USE_CLI=false" >> $GITHUB_ENV
 
       - name: Terraform Init
         run: |
