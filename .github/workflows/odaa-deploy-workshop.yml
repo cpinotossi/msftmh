@@ -43,7 +43,8 @@ jobs:
       - name: Azure Login
         run: |
           az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
-          # Export for Terraform to use Azure CLI authentication
+          # Override MSI flag - Container Apps don't have IMDS, use CLI auth instead
+          echo "ARM_USE_MSI=false" >> $GITHUB_ENV
           echo "ARM_USE_CLI=true" >> $GITHUB_ENV
 
       - name: Terraform Init
