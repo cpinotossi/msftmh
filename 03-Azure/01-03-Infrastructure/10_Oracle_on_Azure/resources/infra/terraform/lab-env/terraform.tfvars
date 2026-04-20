@@ -3,24 +3,11 @@
 # ===============================================================================
 
 # ===============================================================================
-# Azure Authentication (via Managed Identity - no client_secret needed)
+# Azure Authentication & Subscriptions
+# NOTE: tenant_id, mhcore_subscription_id, mh0_subscription_id, mhodaa_subscription_id
+# are set centrally via GitHub Variables (TF_VAR_*). Do NOT duplicate here.
+# For local runs: export TF_VAR_tenant_id=... etc.
 # ===============================================================================
-
-tenant_id = "f71980b2-590a-4de9-90d5-6fbc867da951"
-# client_id and client_secret not needed - using Managed Identity
-
-# ===============================================================================
-# Subscription Configuration (3 Subscriptions)
-# ===============================================================================
-
-# Gallery Subscription (sub-mhcore) - Compute Gallery
-mhcore_subscription_id = "09808f31-065f-4231-914d-776c2d6bbe34"
-
-# VM Subscription (sub-mh0) - Workshop VMs, VNets
-mh0_subscription_id = "556f9b63-ebc9-4c7e-8437-9a05aa8cdb25"
-
-# ODAA Subscription (sub-mhodaa) - Shared ODAA VNet, Anchors, User RGs
-mhodaa_subscription_id = "4aecf0e8-2fe2-4187-bc93-0356bd2676f5"
 
 # ===============================================================================
 # Location

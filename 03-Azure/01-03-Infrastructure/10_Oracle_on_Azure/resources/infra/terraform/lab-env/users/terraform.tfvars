@@ -1,26 +1,9 @@
 # ===============================================================================
 # Terraform Variables - Users Infrastructure
 # ===============================================================================
-
-tenant_id = "f71980b2-590a-4de9-90d5-6fbc867da951"
-
+# NOTE: tenant_id, mh0_subscription_id, mhodaa_subscription_id, tf_state_storage,
+# tf_state_rg are set centrally via GitHub Variables (TF_VAR_*). Do NOT duplicate here.
 # ===============================================================================
-# Subscription Configuration
-# ===============================================================================
-
-# VM Subscription (sub-mh0) - Workshop VMs, VNets
-mh0_subscription_id = "556f9b63-ebc9-4c7e-8437-9a05aa8cdb25"
-
-# ODAA Subscription (sub-mhodaa) - User ODAA RGs, Peering
-mhodaa_subscription_id = "4aecf0e8-2fe2-4187-bc93-0356bd2676f5"
-
-# ===============================================================================
-# Remote State (for reading shared/ outputs)
-# ===============================================================================
-
-tf_state_storage = "stodaamhtfstate"
-tf_state_rg      = "rg-odaamh-github-runner"
-# tf_state_use_azuread_auth = true  # default; key-based auth disabled on storage account
 
 # ===============================================================================
 # Location

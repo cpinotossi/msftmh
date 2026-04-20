@@ -43,6 +43,10 @@ concurrency:
 env:
   TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/${{ inputs.project }}'
   TF_VERSION: '1.13.4'
+  TF_VAR_tenant_id: ${{ vars.TF_TENANT_ID }}
+  TF_VAR_mhcore_subscription_id: ${{ vars.TF_MHCORE_SUBSCRIPTION_ID }}
+  TF_VAR_mh0_subscription_id: ${{ vars.TF_MH0_SUBSCRIPTION_ID }}
+  TF_VAR_mhodaa_subscription_id: ${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}
 
 jobs:
   import:
