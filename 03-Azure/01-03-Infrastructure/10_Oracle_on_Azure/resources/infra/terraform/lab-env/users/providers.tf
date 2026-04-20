@@ -6,12 +6,12 @@
 # ===============================================================================
 
 # ===============================================================================
-# VM Provider (sub-mh0: Workshop VMs, VNets)
+# mh0 Provider (sub-mh0: Workshop VMs, VNets)
 # ===============================================================================
 
 provider "azurerm" {
-  alias           = "vm"
-  subscription_id = var.vm_subscription_id
+  alias           = "mh0"
+  subscription_id = var.mh0_subscription_id
   use_cli         = false
   use_msi         = true
 
@@ -28,12 +28,12 @@ provider "azurerm" {
 }
 
 # ===============================================================================
-# ODAA Provider (sub-mhodaa: User ODAA RGs, VNet Peering ODAA side)
+# mhodaa Provider (sub-mhodaa: User ODAA RGs, VNet Peering ODAA side)
 # ===============================================================================
 
 provider "azurerm" {
-  alias           = "odaa"
-  subscription_id = var.odaa_subscription_id
+  alias           = "mhodaa"
+  subscription_id = var.mhodaa_subscription_id
   use_cli         = false
   use_msi         = true
 

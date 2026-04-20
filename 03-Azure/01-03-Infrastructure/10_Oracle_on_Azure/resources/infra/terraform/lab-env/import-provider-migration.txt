@@ -1,0 +1,7 @@
+# Provider alias migration: odaa -> mhodaa
+# Step 1: Remove resources with old provider alias from state
+rm:azurerm_role_definition.odaa_db_creator
+rm:azurerm_role_assignment.shared_odaa_group
+# Step 2: Re-import with new provider alias (azurerm.mhodaa)
+azurerm_role_definition.odaa_db_creator=/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/providers/Microsoft.Authorization/roleDefinitions/c02191a8-7480-6430-d9fc-2d006164a261|/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5
+azurerm_role_assignment.shared_odaa_group=/subscriptions/4aecf0e8-2fe2-4187-bc93-0356bd2676f5/resourceGroups/rg-odaa-shared/providers/Microsoft.Authorization/roleAssignments/f6aafadb-fd42-36d2-1a20-2cad97c543d6

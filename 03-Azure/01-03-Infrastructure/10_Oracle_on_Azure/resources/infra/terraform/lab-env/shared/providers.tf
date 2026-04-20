@@ -6,12 +6,12 @@
 # ===============================================================================
 
 # ===============================================================================
-# Gallery Provider (sub-mhcore: Compute Gallery)
+# mhcore Provider (sub-mhcore: Compute Gallery)
 # ===============================================================================
 
 provider "azurerm" {
-  alias           = "gallery"
-  subscription_id = var.gallery_subscription_id
+  alias           = "mhcore"
+  subscription_id = var.mhcore_subscription_id
   use_cli         = false
   use_msi         = true
 
@@ -23,12 +23,12 @@ provider "azurerm" {
 }
 
 # ===============================================================================
-# ODAA Provider (sub-mhodaa: Shared ODAA VNet, Anchors, Role Definition)
+# mhodaa Provider (sub-mhodaa: Shared ODAA VNet, Anchors, Role Definition)
 # ===============================================================================
 
 provider "azurerm" {
-  alias           = "odaa"
-  subscription_id = var.odaa_subscription_id
+  alias           = "mhodaa"
+  subscription_id = var.mhodaa_subscription_id
   use_cli         = false
   use_msi         = true
 
@@ -44,7 +44,7 @@ provider "azurerm" {
 # ===============================================================================
 
 provider "azapi" {
-  subscription_id = var.odaa_subscription_id
+  subscription_id = var.mhodaa_subscription_id
   use_cli         = false
   use_msi         = true
 }

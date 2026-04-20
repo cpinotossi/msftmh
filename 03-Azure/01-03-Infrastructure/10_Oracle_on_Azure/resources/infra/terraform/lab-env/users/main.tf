@@ -43,7 +43,7 @@ module "user_vm" {
   source   = "../modules/user-vm"
 
   providers = {
-    azurerm = azurerm.vm
+    azurerm = azurerm.mh0
   }
 
   user_index           = tonumber(each.key)
@@ -79,7 +79,7 @@ module "user_odaa" {
   source   = "../modules/user-odaa"
 
   providers = {
-    azurerm = azurerm.odaa
+    azurerm = azurerm.mhodaa
   }
 
   user_index = tonumber(each.key)
@@ -100,8 +100,8 @@ module "peering" {
   source   = "../modules/vnet-peering"
 
   providers = {
-    azurerm.vm   = azurerm.vm
-    azurerm.odaa = azurerm.odaa
+    azurerm.mh0    = azurerm.mh0
+    azurerm.mhodaa = azurerm.mhodaa
   }
 
   vm_vnet_id          = module.user_vm[each.key].vnet_id
@@ -123,8 +123,8 @@ module "peering_basedb" {
   source   = "../modules/vnet-peering"
 
   providers = {
-    azurerm.vm   = azurerm.vm
-    azurerm.odaa = azurerm.odaa
+    azurerm.mh0    = azurerm.mh0
+    azurerm.mhodaa = azurerm.mhodaa
   }
 
   vm_vnet_id          = module.user_vm[each.key].vnet_id

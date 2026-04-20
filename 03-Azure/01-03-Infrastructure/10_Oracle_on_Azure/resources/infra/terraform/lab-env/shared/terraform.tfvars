@@ -9,10 +9,10 @@ tenant_id = "f71980b2-590a-4de9-90d5-6fbc867da951"
 # ===============================================================================
 
 # Gallery Subscription (sub-mhcore) - Compute Gallery
-gallery_subscription_id = "09808f31-065f-4231-914d-776c2d6bbe34"
+mhcore_subscription_id = "09808f31-065f-4231-914d-776c2d6bbe34"
 
 # ODAA Subscription (sub-mhodaa) - Shared ODAA VNet, Anchors, Role Definition
-odaa_subscription_id = "4aecf0e8-2fe2-4187-bc93-0356bd2676f5"
+mhodaa_subscription_id = "4aecf0e8-2fe2-4187-bc93-0356bd2676f5"
 
 # ===============================================================================
 # Location

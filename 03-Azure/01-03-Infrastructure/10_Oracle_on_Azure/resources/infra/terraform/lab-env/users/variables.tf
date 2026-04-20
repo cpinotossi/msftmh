@@ -15,12 +15,12 @@ variable "tenant_id" {
 # Subscription Configuration
 # ===============================================================================
 
-variable "vm_subscription_id" {
+variable "mh0_subscription_id" {
   description = "Azure subscription ID for Workshop VMs, VNets, DNS (sub-mh0)"
   type        = string
 }
 
-variable "odaa_subscription_id" {
+variable "mhodaa_subscription_id" {
   description = "Azure subscription ID for ODAA user RGs, peering (sub-mhodaa)"
   type        = string
 }

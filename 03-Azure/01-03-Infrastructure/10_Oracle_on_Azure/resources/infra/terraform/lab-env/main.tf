@@ -34,10 +34,10 @@
 # ===============================================================================
 
 resource "azurerm_role_definition" "odaa_db_creator" {
-  provider = azurerm.odaa
+  provider = azurerm.mhodaa
 
   name        = "Oracle Database Creator"
-  scope       = "/subscriptions/${var.odaa_subscription_id}"
+  scope       = "/subscriptions/${var.mhodaa_subscription_id}"
   description = "Allows creating and managing Oracle ADB and BaseDB resources, and using existing VNets/Subnets. Workshop least-privilege role."
 
   permissions {
@@ -64,7 +64,7 @@ resource "azurerm_role_definition" "odaa_db_creator" {
   }
 
   assignable_scopes = [
-    "/subscriptions/${var.odaa_subscription_id}"
+    "/subscriptions/${var.mhodaa_subscription_id}"
   ]
 }
 
@@ -76,7 +76,7 @@ module "shared" {
   source = "./modules/shared"
 
   providers = {
-    azurerm = azurerm.gallery
+    azurerm = azurerm.mhcore
   }
 
   location     = var.location
@@ -93,7 +93,7 @@ module "shared_odaa" {
   source = "./modules/shared-odaa"
 
   providers = {
-    azurerm = azurerm.odaa
+    azurerm = azurerm.mhodaa
     azapi   = azapi
   }
 
@@ -106,7 +106,7 @@ module "shared_odaa" {
 # RBAC: User group gets Oracle Database Creator on shared ODAA RG
 # (needed for network read/join on the shared VNet when creating DBs via Portal)
 resource "azurerm_role_assignment" "shared_odaa_group" {
-  provider           = azurerm.odaa
+  provider           = azurerm.mhodaa
   scope              = module.shared_odaa.resource_group_id
   role_definition_id = azurerm_role_definition.odaa_db_creator.role_definition_resource_id
   principal_id       = var.odaa_user_group_id
@@ -131,7 +131,7 @@ module "user_vm" {
   source   = "./modules/user-vm"
 
   providers = {
-    azurerm = azurerm.vm
+    azurerm = azurerm.mh0
   }
 
   user_index           = tonumber(each.key)
@@ -167,7 +167,7 @@ module "user_odaa" {
   source   = "./modules/user-odaa"
 
   providers = {
-    azurerm = azurerm.odaa
+    azurerm = azurerm.mhodaa
   }
 
   user_index = tonumber(each.key)
@@ -188,8 +188,8 @@ module "peering" {
   source   = "./modules/vnet-peering"
 
   providers = {
-    azurerm.vm   = azurerm.vm
-    azurerm.odaa = azurerm.odaa
+    azurerm.mh0    = azurerm.mh0
+    azurerm.mhodaa = azurerm.mhodaa
   }
 
   vm_vnet_id          = module.user_vm[each.key].vnet_id
@@ -211,8 +211,8 @@ module "peering_basedb" {
   source   = "./modules/vnet-peering"
 
   providers = {
-    azurerm.vm   = azurerm.vm
-    azurerm.odaa = azurerm.odaa
+    azurerm.mh0    = azurerm.mh0
+    azurerm.mhodaa = azurerm.mhodaa
   }
 
   vm_vnet_id          = module.user_vm[each.key].vnet_id

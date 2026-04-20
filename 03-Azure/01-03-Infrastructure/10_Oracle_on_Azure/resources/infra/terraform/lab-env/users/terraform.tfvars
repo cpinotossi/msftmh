@@ -9,10 +9,10 @@ tenant_id = "f71980b2-590a-4de9-90d5-6fbc867da951"
 # ===============================================================================
 
 # VM Subscription (sub-mh0) - Workshop VMs, VNets
-vm_subscription_id = "556f9b63-ebc9-4c7e-8437-9a05aa8cdb25"
+mh0_subscription_id = "556f9b63-ebc9-4c7e-8437-9a05aa8cdb25"
 
 # ODAA Subscription (sub-mhodaa) - User ODAA RGs, Peering
-odaa_subscription_id = "4aecf0e8-2fe2-4187-bc93-0356bd2676f5"
+mhodaa_subscription_id = "4aecf0e8-2fe2-4187-bc93-0356bd2676f5"
 
 # ===============================================================================
 # Remote State (for reading shared/ outputs)

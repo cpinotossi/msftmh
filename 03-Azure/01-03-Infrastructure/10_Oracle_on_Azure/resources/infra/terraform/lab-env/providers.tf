@@ -2,9 +2,9 @@
 # Provider Configuration - 3 Subscriptions (Shared ODAA VNet)
 # ===============================================================================
 # This file configures Azure providers for the Oracle on Azure infrastructure:
-# - azurerm.gallery: Gallery Subscription (Compute Gallery) — sub-mhcore
-# - azurerm.vm:      VM Subscription (Workshop VMs, VNets, DNS) — sub-mh0
-# - azurerm.odaa:    ODAA Subscription (Shared VNet, Anchors, User RGs) — sub-mhodaa
+# - azurerm.mhcore:  Gallery Subscription (Compute Gallery) — sub-mhcore
+# - azurerm.mh0:     VM Subscription (Workshop VMs, VNets, DNS) — sub-mh0
+# - azurerm.mhodaa:  ODAA Subscription (Shared VNet, Anchors, User RGs) — sub-mhodaa
 # - azapi:           AzAPI provider for Oracle network anchors (ODAA sub)
 #
 # Authentication: Uses ARM_* environment variables or Managed Identity
@@ -13,12 +13,12 @@
 # ===============================================================================
 
 # ===============================================================================
-# Gallery Provider (sub-mhcore: Compute Gallery)
+# mhcore Provider (sub-mhcore: Compute Gallery)
 # ===============================================================================
 
 provider "azurerm" {
-  alias           = "gallery"
-  subscription_id = var.gallery_subscription_id
+  alias           = "mhcore"
+  subscription_id = var.mhcore_subscription_id
 
   features {
     resource_group {
@@ -28,12 +28,12 @@ provider "azurerm" {
 }
 
 # ===============================================================================
-# VM Provider (sub-mh0: Workshop VMs, VNets)
+# mh0 Provider (sub-mh0: Workshop VMs, VNets)
 # ===============================================================================
 
 provider "azurerm" {
-  alias           = "vm"
-  subscription_id = var.vm_subscription_id
+  alias           = "mh0"
+  subscription_id = var.mh0_subscription_id
 
   features {
     resource_group {
@@ -48,12 +48,12 @@ provider "azurerm" {
 }
 
 # ===============================================================================
-# ODAA Provider (sub-mhodaa: Shared ODAA VNet, Anchors, User RGs)
+# mhodaa Provider (sub-mhodaa: Shared ODAA VNet, Anchors, User RGs)
 # ===============================================================================
 
 provider "azurerm" {
-  alias           = "odaa"
-  subscription_id = var.odaa_subscription_id
+  alias           = "mhodaa"
+  subscription_id = var.mhodaa_subscription_id
 
   features {
     resource_group {
@@ -67,7 +67,7 @@ provider "azurerm" {
 # ===============================================================================
 
 provider "azapi" {
-  subscription_id = var.odaa_subscription_id
+  subscription_id = var.mhodaa_subscription_id
 }
 
 # ===============================================================================

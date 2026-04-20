@@ -17,17 +17,17 @@ variable "tenant_id" {
 # Subscription Configuration (3 Subscriptions)
 # ===============================================================================
 
-variable "gallery_subscription_id" {
+variable "mhcore_subscription_id" {
   description = "Azure subscription ID for the Compute Gallery (sub-mhcore)"
   type        = string
 }
 
-variable "vm_subscription_id" {
+variable "mh0_subscription_id" {
   description = "Azure subscription ID for Workshop VMs, VNets, DNS (sub-mh0)"
   type        = string
 }
 
-variable "odaa_subscription_id" {
+variable "mhodaa_subscription_id" {
   description = "Azure subscription ID for ODAA shared VNet, anchors, user RGs (sub-mhodaa)"
   type        = string
 }

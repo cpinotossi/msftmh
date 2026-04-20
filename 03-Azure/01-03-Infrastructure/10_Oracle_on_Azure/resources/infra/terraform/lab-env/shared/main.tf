@@ -19,7 +19,7 @@ module "shared" {
   source = "../modules/shared"
 
   providers = {
-    azurerm = azurerm.gallery
+    azurerm = azurerm.mhcore
   }
 
   location       = var.location
@@ -37,7 +37,7 @@ module "shared_odaa" {
   source = "../modules/shared-odaa"
 
   providers = {
-    azurerm = azurerm.odaa
+    azurerm = azurerm.mhodaa
     azapi   = azapi
   }
 
@@ -52,10 +52,10 @@ module "shared_odaa" {
 # ===============================================================================
 
 resource "azurerm_role_definition" "odaa_db_creator" {
-  provider = azurerm.odaa
+  provider = azurerm.mhodaa
 
   name        = "Oracle Database Creator"
-  scope       = "/subscriptions/${var.odaa_subscription_id}"
+  scope       = "/subscriptions/${var.mhodaa_subscription_id}"
   description = "Allows creating and managing Oracle ADB and BaseDB resources, and using existing VNets/Subnets. Workshop least-privilege role."
 
   permissions {
@@ -82,7 +82,7 @@ resource "azurerm_role_definition" "odaa_db_creator" {
   }
 
   assignable_scopes = [
-    "/subscriptions/${var.odaa_subscription_id}"
+    "/subscriptions/${var.mhodaa_subscription_id}"
   ]
 }
 
@@ -93,7 +93,7 @@ resource "azurerm_role_definition" "odaa_db_creator" {
 # ===============================================================================
 
 resource "azurerm_role_assignment" "shared_odaa_group" {
-  provider           = azurerm.odaa
+  provider           = azurerm.mhodaa
   scope              = module.shared_odaa.resource_group_id
   role_definition_id = azurerm_role_definition.odaa_db_creator.role_definition_resource_id
   principal_id       = var.odaa_user_group_id

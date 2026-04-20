@@ -10,7 +10,7 @@ terraform {
     azurerm = {
       source                = "hashicorp/azurerm"
       version               = "~> 4.0"
-      configuration_aliases = [azurerm.vm, azurerm.odaa]
+      configuration_aliases = [azurerm.mh0, azurerm.mhodaa]
     }
   }
 }
@@ -20,7 +20,7 @@ terraform {
 # ===============================================================================
 
 resource "azurerm_virtual_network_peering" "vm_to_odaa" {
-  provider                  = azurerm.vm
+  provider                  = azurerm.mh0
   name                      = var.peering_suffix != "" ? "peer-vm-to-odaa-${var.peering_suffix}" : "peer-vm-to-odaa"
   resource_group_name       = var.vm_resource_group
   virtual_network_name      = var.vm_vnet_name
@@ -42,7 +42,7 @@ resource "azurerm_virtual_network_peering" "vm_to_odaa" {
 # ===============================================================================
 
 resource "azurerm_virtual_network_peering" "odaa_to_vm" {
-  provider                  = azurerm.odaa
+  provider                  = azurerm.mhodaa
   name                      = var.peering_suffix != "" ? "peer-odaa-to-vm-${var.peering_suffix}" : "peer-odaa-to-vm"
   resource_group_name       = var.odaa_resource_group
   virtual_network_name      = var.odaa_vnet_name
