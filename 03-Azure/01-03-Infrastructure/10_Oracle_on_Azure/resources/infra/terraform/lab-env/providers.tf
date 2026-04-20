@@ -7,7 +7,9 @@
 # - azurerm.odaa:    ODAA Subscription (Shared VNet, Anchors, User RGs) — sub-mhodaa
 # - azapi:           AzAPI provider for Oracle network anchors (ODAA sub)
 #
-# All users share a single ODAA VNet+Subnet. Each user VM VNet peers to it.
+# Authentication: Uses ARM_* environment variables or Managed Identity
+# For MSI: Set ARM_USE_MSI=true, ARM_CLIENT_ID, ARM_SUBSCRIPTION_ID, ARM_TENANT_ID
+# For SP:  Set ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_TENANT_ID
 # ===============================================================================
 
 # ===============================================================================
@@ -17,9 +19,6 @@
 provider "azurerm" {
   alias           = "gallery"
   subscription_id = var.gallery_subscription_id
-  tenant_id       = var.tenant_id
-  client_id       = var.client_id
-  client_secret   = var.client_secret
 
   features {
     resource_group {
@@ -35,9 +34,6 @@ provider "azurerm" {
 provider "azurerm" {
   alias           = "vm"
   subscription_id = var.vm_subscription_id
-  tenant_id       = var.tenant_id
-  client_id       = var.client_id
-  client_secret   = var.client_secret
 
   features {
     resource_group {
@@ -58,9 +54,6 @@ provider "azurerm" {
 provider "azurerm" {
   alias           = "odaa"
   subscription_id = var.odaa_subscription_id
-  tenant_id       = var.tenant_id
-  client_id       = var.client_id
-  client_secret   = var.client_secret
 
   features {
     resource_group {
@@ -75,9 +68,6 @@ provider "azurerm" {
 
 provider "azapi" {
   subscription_id = var.odaa_subscription_id
-  tenant_id       = var.tenant_id
-  client_id       = var.client_id
-  client_secret   = var.client_secret
 }
 
 # ===============================================================================
@@ -85,7 +75,4 @@ provider "azapi" {
 # ===============================================================================
 
 provider "azuread" {
-  tenant_id     = var.tenant_id
-  client_id     = var.client_id
-  client_secret = var.client_secret
 }

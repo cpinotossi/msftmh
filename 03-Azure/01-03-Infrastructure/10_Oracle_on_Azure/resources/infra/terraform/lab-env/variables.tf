@@ -3,7 +3,7 @@
 # ===============================================================================
 
 # ===============================================================================
-# Azure Authentication
+# Azure Authentication (via ARM_* environment variables or Managed Identity)
 # ===============================================================================
 
 variable "tenant_id" {
@@ -11,16 +11,7 @@ variable "tenant_id" {
   type        = string
 }
 
-variable "client_id" {
-  description = "Service Principal client ID"
-  type        = string
-}
-
-variable "client_secret" {
-  description = "Service Principal client secret"
-  type        = string
-  sensitive   = true
-}
+# Note: client_id and client_secret removed - using ARM_* env vars or Managed Identity
 
 # ===============================================================================
 # Subscription Configuration (3 Subscriptions)
