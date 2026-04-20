@@ -40,6 +40,8 @@ jobs:
           az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
           echo "ARM_USE_MSI=true" >> $GITHUB_ENV
           echo "ARM_USE_CLI=false" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=$(az account show --query tenantId -o tsv)" >> $GITHUB_ENV
+          echo "ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)" >> $GITHUB_ENV
           # Hide az CLI SP session from terraform backend
           echo "AZURE_CONFIG_DIR=$(mktemp -d)" >> $GITHUB_ENV
 
@@ -78,8 +80,11 @@ jobs:
           sleep 1
           # Verify proxy is running
           curl -sf "http://127.0.0.1:54321/msi/token?api-version=2019-08-01&resource=https://management.azure.com&client_id=$ARM_CLIENT_ID" | python3 -c "import sys,json; t=json.load(sys.stdin); print('MSI proxy OK, token type:', t.get('token_type','?'))"
-          # Point MSI_ENDPOINT to proxy
+          # Point ALL MSI endpoints to proxy (backend uses MSI_ENDPOINT, ARM config uses ARM_MSI_ENDPOINT)
           echo "MSI_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
+          echo "ARM_MSI_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
+          # Override IDENTITY_ENDPOINT so azure-identity SDK also uses proxy
+          echo "IDENTITY_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
 
       - name: Terraform Init
         env:
@@ -90,7 +95,10 @@ jobs:
             -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
             -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
             -backend-config="use_msi=true" \
-            -backend-config="client_id=$ARM_CLIENT_ID"
+            -backend-config="client_id=$ARM_CLIENT_ID" \
+            -backend-config="msi_endpoint=http://127.0.0.1:54321/msi/token" \
+            -backend-config="subscription_id=$ARM_SUBSCRIPTION_ID" \
+            -backend-config="tenant_id=$ARM_TENANT_ID"
 
       - name: Terraform Apply
         run: terraform apply -auto-approve
