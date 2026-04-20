@@ -40,22 +40,46 @@ jobs:
           az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
           echo "ARM_USE_MSI=true" >> $GITHUB_ENV
           echo "ARM_USE_CLI=false" >> $GITHUB_ENV
-          # Map Container Apps IDENTITY_ENDPOINT to MSI_ENDPOINT for older go-azure-helpers
-          echo "MSI_ENDPOINT=$IDENTITY_ENDPOINT" >> $GITHUB_ENV
-          echo "ARM_MSI_ENDPOINT=$IDENTITY_ENDPOINT" >> $GITHUB_ENV
           # Hide az CLI SP session from terraform backend
           echo "AZURE_CONFIG_DIR=$(mktemp -d)" >> $GITHUB_ENV
 
-      - name: Debug Auth Env
+      - name: Start MSI Proxy
         run: |
-          echo "IDENTITY_ENDPOINT=${IDENTITY_ENDPOINT:-NOT SET}"
-          echo "MSI_ENDPOINT=${MSI_ENDPOINT:-NOT SET}"
-          echo "ARM_MSI_ENDPOINT=${ARM_MSI_ENDPOINT:-NOT SET}"
-          echo "ARM_USE_MSI=$ARM_USE_MSI"
-          echo "ARM_USE_CLI=$ARM_USE_CLI"
-          echo "ARM_CLIENT_ID=${ARM_CLIENT_ID:+SET (hidden)}"
-          echo "AZURE_CONFIG_DIR=$AZURE_CONFIG_DIR"
-          ls -la "$AZURE_CONFIG_DIR" 2>/dev/null || echo "AZURE_CONFIG_DIR empty/missing"
+          # TF azurerm backend uses go-autorest which sends api-version=2018-02-01
+          # Container Apps MSI endpoint only supports 2019-08-01 and requires X-IDENTITY-HEADER
+          # This proxy translates between the two
+          cat > /tmp/msi-proxy.py << 'PROXY'
+          import http.server, urllib.request, os, re
+          class H(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  q = self.path.find('?')
+                  qs = self.path[q:] if q >= 0 else ''
+                  qs = re.sub(r'api-version=[^&]+', 'api-version=2019-08-01', qs)
+                  url = os.environ['IDENTITY_ENDPOINT'] + qs
+                  req = urllib.request.Request(url)
+                  req.add_header('X-IDENTITY-HEADER', os.environ['IDENTITY_HEADER'])
+                  try:
+                      with urllib.request.urlopen(req) as resp:
+                          body = resp.read()
+                          self.send_response(200)
+                          self.send_header('Content-Type', 'application/json')
+                          self.end_headers()
+                          self.wfile.write(body)
+                  except urllib.error.HTTPError as e:
+                      body = e.read()
+                      self.send_response(e.code)
+                      self.send_header('Content-Type', 'application/json')
+                      self.end_headers()
+                      self.wfile.write(body)
+              def log_message(self, *a): pass
+          http.server.HTTPServer(('127.0.0.1', 54321), H).serve_forever()
+          PROXY
+          python3 /tmp/msi-proxy.py &
+          sleep 1
+          # Verify proxy is running
+          curl -sf "http://127.0.0.1:54321/msi/token?api-version=2019-08-01&resource=https://management.azure.com&client_id=$ARM_CLIENT_ID" | python3 -c "import sys,json; t=json.load(sys.stdin); print('MSI proxy OK, token type:', t.get('token_type','?'))"
+          # Point MSI_ENDPOINT to proxy
+          echo "MSI_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
 
       - name: Terraform Init
         env:
