@@ -1,61 +1,74 @@
-# Oracle Workshop CI/CD
+# Oracle Workshop
 
 ## Struktur
 
 ```
 terraform/
-├── identity/       # Entra ID Users (einmalig)
-├── github-runner/  # Self-hosted Runner (einmalig)
-├── lab-env/        # Workshop VMs + ODAA
-└── scripts/        # manage-users.ps1
+├── identity/          # Entra ID Users (einmalig, lokal)
+├── github-runner/     # Self-hosted Runner (einmalig, lokal)
+├── lab-env/
+│   ├── shared/        # Shared Infra: Gallery, ODAA VNets, Role Defs
+│   ├── users/         # Per-User: VMs, ODAA RGs, Peerings
+│   └── modules/       # Terraform Module (user-vm, user-odaa, shared-odaa, ...)
+├── scripts/           # manage-users.ps1, deploy.ps1, ...
+└── packer/            # VM Image Build
 ```
 
-## Einmalige Einrichtung
+## Architektur
+
+```
+sub-mhcore (09808f31...)        sub-mh0 (ff0bb075...)           sub-mhodaa (4aecf0e8...)
+┌─────────────────────┐   ┌──────────────────────────┐   ┌──────────────────────────────┐
+│ rg-shared-workshop  │   │ rg-vm-user00             │   │ rg-odaa-shared               │
+│  └─ Compute Gallery │   │  ├─ vnet-vm-user00       │   │  ├─ vnet-odaa-shared         │
+│                     │   │  │   (10.0.0.0/24)       │   │  │   (192.168.0.0/16)        │
+│ rg-odaamh-github-   │   │  ├─ VM + Bastion         │   │  ├─ vnet-odaa-basedb         │
+│ runner              │   │  └─ NAT Gateway          │   │  │   (172.16.0.0/16)         │
+│  ├─ Container App   │   │                          │   │  └─ Resource Anchor          │
+│  │  Job (Runner)    │   │  Peerings:               │   │                              │
+│  └─ Storage Account │   │  vm ↔ vnet-odaa-shared   │   │ rg-odaa-user00               │
+│     (tfstate)       │   │  vm ↔ vnet-odaa-basedb   │   │  └─ (User erstellt DBs hier) │
+└─────────────────────┘   └──────────────────────────┘   └──────────────────────────────┘
+```
+
+
+Runner nach jedem Workflow-Trigger starten:
 
 ```pwsh
-# 1. Users erstellen
-cd identity && terraform apply
-
-# 2. GitHub Runner deployen
-cd github-runner && terraform apply
+az containerapp job start --name caj-odaamh -g rg-odaamh-github-runner --subscription 09808f31-065f-4231-914d-776c2d6bbe34 -o none
 ```
 
-## Workshop-Ablauf
-
-### VOR dem Workshop
+## VOR dem Workshop
 
 ```pwsh
-# 1. Users zurücksetzen
-gh workflow run "1 - Reset Users"
+# Users zurücksetzen (Passwörter + MFA)
+gh workflow run "1 - Reset Users" --repo cpinotossi/msftmh
+# Runner starten (s.o.)
+# Credentials Artifact herunterladen
+gh run download $(gh run list --workflow="odaa-reset-users.yml" --repo cpinotossi/msftmh --limit 1 --json databaseId -q ".[0].databaseId") --repo cpinotossi/msftmh
 
-# 2. Auf Completion warten und Artifact downloaden
-gh run watch
-gh run download --name user-credentials-*
+# Shared Infra deployen (Gallery, ODAA VNets, Anchor)
+gh workflow run "1 - Deploy Shared" --repo cpinotossi/msftmh
+# Runner starten
 
-# 3. user_count setzen und deployen
-code lab-env/terraform.tfvars  # user_count = 15
-git add lab-env/terraform.tfvars
-git commit -m "Deploy 15 users"
-git push
+# User VMs deployen (user_count in users/terraform.tfvars setzen, push triggert automatisch)
+gh workflow run "2 - Deploy Workshop" --repo cpinotossi/msftmh
+# Runner starten
 ```
 
-### NACH dem Workshop
+## NACH dem Workshop
 
 ```pwsh
 # 1. Oracle DBs manuell löschen (Azure Portal)
-
-# 2. Cleanup
-gh workflow run "3 - Cleanup Workshop" -f confirmation=CLEANUP
+# 2. Cleanup (Passwörter rotieren + VMs löschen)
+gh workflow run "3 - Cleanup Workshop" --repo cpinotossi/msftmh -f confirmation=CLEANUP
+# Runner starten
 ```
 
-## Pipelines
+## Terraform Import/State Fix
 
-| Workflow | Trigger | Aktion |
-|----------|---------|--------|
-| 1 - Reset Users | Manuell | Passwörter rotieren + MFA löschen |
-| 2 - Deploy Workshop | Push auf `lab-env/terraform.tfvars` | VMs deployen |
-| 3 - Cleanup Workshop | Manuell + "CLEANUP" | Passwörter rotieren + VMs löschen |
-
-## Single Source of Truth
-
-`lab-env/user_credentials.json` - Einzige Credentials-Datei
+```pwsh
+gh workflow run "4 - Terraform Import" --repo cpinotossi/msftmh -f project=shared -f import_file="lab-env/import-file.txt" -f dry_run=false
+gh workflow run "4 - Terraform Import" --repo cpinotossi/msftmh -f project=users -f imports="rm: tls_private_key.workshop" -f dry_run=false
+# Runner starten
+```
