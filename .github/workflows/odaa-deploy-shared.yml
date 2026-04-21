@@ -4,6 +4,11 @@ name: 1 - Deploy Shared
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/shared/**'
 
 concurrency:
   group: workshop-shared
