@@ -1,6 +1,0 @@
-# Remove all resources from users.tfstate for clean re-deploy
-rm:tls_private_key.workshop
-rm:module.user_vm["00"]
-rm:module.user_odaa["00"]
-rm:module.peering["00"]
-rm:module.peering_basedb["00"]
