@@ -88,8 +88,8 @@ resource "azurerm_storage_account" "tfstate" {
   account_tier                    = "Standard"
   account_replication_type        = "LRS"
   min_tls_version                 = "TLS1_2"
-  shared_access_key_enabled       = false
-  public_network_access_enabled   = true # Needed for AVM to access during setup
+  shared_access_key_enabled       = false     # Policy: key auth disabled
+  public_network_access_enabled   = false     # Policy: only PE access allowed
   allow_nested_items_to_be_public = false
 
   tags = var.tags
@@ -142,9 +142,12 @@ module "github_runner" {
   user_assigned_managed_identity_client_id        = azurerm_user_assigned_identity.runner.client_id
   user_assigned_managed_identity_principal_id     = azurerm_user_assigned_identity.runner.principal_id
 
-  # VNet configuration
+  # VNet configuration — private networking required because Azure Policy
+  # enforces publicNetworkAccess=Disabled on storage accounts.
+  # The CAE needs VNet integration so the runner can reach the TF state
+  # storage via Private Endpoint.
   virtual_network_address_space = var.vnet_address_space
-  use_private_networking        = false # Simplify - no private endpoints
+  use_private_networking        = true
 
   # Container Apps configuration
   container_app_container_cpu    = 2
@@ -173,4 +176,100 @@ module "github_runner" {
     azurerm_resource_group.runner,
     azurerm_user_assigned_identity.runner
   ]
+}
+
+# ===============================================================================
+# Private Endpoint for Terraform State Storage
+# ===============================================================================
+# Azure Policy enforces publicNetworkAccess=Disabled and key-auth=false on
+# storage accounts. The Container Apps Job runs inside the AVM-created VNet,
+# so we create a PE in a dedicated subnet to allow blob access.
+# ===============================================================================
+
+resource "azurerm_subnet" "private_endpoints" {
+  name                 = var.subnet_private_endpoints_name
+  resource_group_name  = azurerm_resource_group.runner.name
+  virtual_network_name = module.github_runner.virtual_network_name
+  address_prefixes     = [var.subnet_private_endpoints_prefix]
+}
+
+resource "azurerm_private_dns_zone" "blob" {
+  name                = "privatelink.blob.core.windows.net"
+  resource_group_name = azurerm_resource_group.runner.name
+  tags                = var.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
+  name                  = "link-${module.github_runner.virtual_network_name}"
+  resource_group_name   = azurerm_resource_group.runner.name
+  private_dns_zone_name = azurerm_private_dns_zone.blob.name
+  virtual_network_id    = module.github_runner.virtual_network_resource_id
+  registration_enabled  = false
+  tags                  = var.tags
+}
+
+resource "azurerm_private_endpoint" "storage" {
+  name                = var.storage_private_endpoint_name
+  resource_group_name = azurerm_resource_group.runner.name
+  location            = azurerm_resource_group.runner.location
+  subnet_id           = azurerm_subnet.private_endpoints.id
+  tags                = var.tags
+
+  private_service_connection {
+    name                           = "psc-${var.storage_account_name}"
+    private_connection_resource_id = azurerm_storage_account.tfstate.id
+    subresource_names              = ["blob"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "default"
+    private_dns_zone_ids = [azurerm_private_dns_zone.blob.id]
+  }
+}
+
+# ===============================================================================
+# KEDA Labels Fix (azapi_update_resource)
+# ===============================================================================
+# The AVM module (Azure/avm-ptn-cicd-agents-and-runners) does not pass custom
+# runner labels to the KEDA github-runner scaler metadata. Without labels,
+# KEDA only matches the default labels (self-hosted, linux, x64) and ignores
+# workflows that require custom labels like "azure,container-apps,terraform".
+#
+# This is a known gap in the AVM module — it sets the LABELS env var on the
+# container (which registers the runner with those labels at GitHub), but does
+# NOT include them in the KEDA scaler metadata (which controls auto-scaling).
+#
+# Workaround: patch the Container Apps Job after AVM deploys it, adding the
+# "labels" field to the KEDA scale rule metadata.
+# See: https://keda.sh/docs/latest/scalers/github-runner/
+# ===============================================================================
+
+resource "azapi_update_resource" "keda_labels" {
+  type        = "Microsoft.App/jobs@2024-03-01"
+  resource_id = module.github_runner.job_resource_id
+
+  body = {
+    properties = {
+      configuration = {
+        eventTriggerConfig = {
+          scale = {
+            rules = [{
+              name = "github-runner"
+              type = "github-runner"
+              metadata = {
+                owner                     = var.github_owner
+                repos                     = var.github_repo
+                runnerScope               = var.github_runner_scope
+                targetWorkflowQueueLength = "1"
+                labels                    = "azure,container-apps,terraform"
+              }
+            }]
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [module.github_runner]
 }
