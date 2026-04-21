@@ -13,6 +13,10 @@ name: 1 - Reset Users
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/users/user_credentials.template.json'
 
 concurrency:
   group: workshop
@@ -20,7 +24,7 @@ concurrency:
 
 env:
   SCRIPTS_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/scripts'
-  CREDS_TEMPLATE: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/user_credentials.template.json'
+  CREDS_TEMPLATE: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/users/user_credentials.template.json'
   CREDS_FILE: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform/lab-env/user_credentials.json'
 
 jobs:

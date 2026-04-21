@@ -31,7 +31,6 @@ sub-mhcore (09808f31...)        sub-mh0 (ff0bb075...)           sub-mhodaa (4aec
 └─────────────────────┘   └──────────────────────────┘   └──────────────────────────────┘
 ```
 
-
 Runner nach jedem Workflow-Trigger starten:
 
 ```pwsh
@@ -40,21 +39,44 @@ az containerapp job start --name caj-odaamh -g rg-odaamh-github-runner --subscri
 
 ## VOR dem Workshop
 
+Alle Workflows werden via `git commit` + `push` getriggert. Die Reihenfolge ist wichtig.
+
+### Schritt 1: Users zurücksetzen (Passwörter + MFA)
+
+Wert des Atribute "mh-name" änderung im File `lab-env/users/user_credentials.template.json`. Das triggert den Reset-Workflow.
+
 ```pwsh
-# Users zurücksetzen (Passwörter + MFA)
-gh workflow run "1 - Reset Users" --repo cpinotossi/msftmh
-# Runner starten (s.o.)
-# Credentials Artifact herunterladen
+# z.B. mh-name setzen oder beliebige Änderung am Template
+cd 03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform
+code lab-env/users/user_credentials.template.json
+
+git add lab-env/users/user_credentials.template.json
+git commit -m "FRA-MH-20260421"
+git push
+# Workflow status prüfen
+gh run list --workflow="odaa-reset-users.yml" --repo cpinotossi/msftmh --limit 1
+# Warten bis fertig, dann Credentials Artifact herunterladen
 gh run download $(gh run list --workflow="odaa-reset-users.yml" --repo cpinotossi/msftmh --limit 1 --json databaseId -q ".[0].databaseId") --repo cpinotossi/msftmh
-
-# Shared Infra deployen (Gallery, ODAA VNets, Anchor)
-gh workflow run "1 - Deploy Shared" --repo cpinotossi/msftmh
-# Runner starten
-
-# User VMs deployen (user_count in users/terraform.tfvars setzen, push triggert automatisch)
-gh workflow run "2 - Deploy Workshop" --repo cpinotossi/msftmh
-# Runner starten
 ```
+
+### Schritt 2: Workshop deployen (Shared + User VMs)
+
+Änderung an `lab-env/users/terraform.tfvars` (z.B. `user_count`) triggert den Deploy-Workshop-Workflow.
+
+```pwsh
+# user_count anpassen, dann:
+git add lab-env/users/terraform.tfvars
+git commit -m "deploy workshop user_count=25"
+git push
+# Runner starten
+az containerapp job start --name caj-odaamh -g rg-odaamh-github-runner --subscription 09808f31-065f-4231-914d-776c2d6bbe34 -o none
+```
+
+> **Hinweis:** Shared Infra (`1 - Deploy Shared`) muss vorher deployed sein. Falls nicht, manuell triggern:
+> ```pwsh
+> gh workflow run "1 - Deploy Shared" --repo cpinotossi/msftmh
+> az containerapp job start --name caj-odaamh -g rg-odaamh-github-runner --subscription 09808f31-065f-4231-914d-776c2d6bbe34 -o none
+> ```
 
 ## NACH dem Workshop
 
