@@ -55,7 +55,9 @@ git commit -m "FRA-MH-20260421"
 git push
 # Workflow status prüfen
 gh run list --workflow="odaa-reset-users.yml" --repo cpinotossi/msftmh --limit 1
-# Warten bis fertig, dann Credentials Artifact herunterladen
+# Wartet bis zum Abschluss und zeigt Ergebnis
+gh run watch $(gh run list --workflow="odaa-reset-users.yml" --repo cpinotossi/msftmh --limit 1 --json databaseId -q ".[0].databaseId") --repo cpinotossi/msftmh --exit-status
+# Credentials Artifact herunterladen
 gh run download $(gh run list --workflow="odaa-reset-users.yml" --repo cpinotossi/msftmh --limit 1 --json databaseId -q ".[0].databaseId") --repo cpinotossi/msftmh
 ```
 
@@ -64,33 +66,18 @@ gh run download $(gh run list --workflow="odaa-reset-users.yml" --repo cpinotoss
 Änderung an `lab-env/users/terraform.tfvars` (z.B. `user_count`) triggert den Deploy-Workshop-Workflow.
 
 ```pwsh
+code lab-env/users/terraform.tfvars
 # user_count anpassen, dann:
 git add lab-env/users/terraform.tfvars
 git commit -m "deploy workshop user_count=25"
 git push
-# Runner starten
-az containerapp job start --name caj-odaamh -g rg-odaamh-github-runner --subscription 09808f31-065f-4231-914d-776c2d6bbe34 -o none
+# Workflow status prüfen
+gh run list --workflow="odaa-deploy-workshop.yml" --repo cpinotossi/msftmh --limit 1
+# Wartet bis zum Abschluss und zeigt Ergebnis
+gh run watch $(gh run list --workflow="odaa-deploy-workshop.yml" --repo cpinotossi/msftmh --limit 1 --json databaseId -q ".[0].databaseId") --repo cpinotossi/msftmh --exit-status
 ```
 
 > **Hinweis:** Shared Infra (`1 - Deploy Shared`) muss vorher deployed sein. Falls nicht, manuell triggern:
 > ```pwsh
 > gh workflow run "1 - Deploy Shared" --repo cpinotossi/msftmh
-> az containerapp job start --name caj-odaamh -g rg-odaamh-github-runner --subscription 09808f31-065f-4231-914d-776c2d6bbe34 -o none
 > ```
-
-## NACH dem Workshop
-
-```pwsh
-# 1. Oracle DBs manuell löschen (Azure Portal)
-# 2. Cleanup (Passwörter rotieren + VMs löschen)
-gh workflow run "3 - Cleanup Workshop" --repo cpinotossi/msftmh -f confirmation=CLEANUP
-# Runner starten
-```
-
-## Terraform Import/State Fix
-
-```pwsh
-gh workflow run "4 - Terraform Import" --repo cpinotossi/msftmh -f project=shared -f import_file="lab-env/import-file.txt" -f dry_run=false
-gh workflow run "4 - Terraform Import" --repo cpinotossi/msftmh -f project=users -f imports="rm: tls_private_key.workshop" -f dry_run=false
-# Runner starten
-```
