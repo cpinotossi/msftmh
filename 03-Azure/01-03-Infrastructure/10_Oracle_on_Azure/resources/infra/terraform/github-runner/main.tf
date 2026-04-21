@@ -245,30 +245,12 @@ resource "azurerm_private_endpoint" "storage" {
 # See: https://keda.sh/docs/latest/scalers/github-runner/
 # ===============================================================================
 
-resource "azapi_update_resource" "keda_labels" {
-  type        = "Microsoft.App/jobs@2024-03-01"
-  resource_id = module.github_runner.job_resource_id
+resource "terraform_data" "keda_labels" {
+  triggers_replace = [module.github_runner.job_resource_id]
 
-  body = {
-    properties = {
-      configuration = {
-        eventTriggerConfig = {
-          scale = {
-            rules = [{
-              name = "github-runner"
-              type = "github-runner"
-              metadata = {
-                owner                     = var.github_owner
-                repos                     = var.github_repo
-                runnerScope               = var.github_runner_scope
-                targetWorkflowQueueLength = "1"
-                labels                    = "azure,container-apps,terraform"
-              }
-            }]
-          }
-        }
-      }
-    }
+  provisioner "local-exec" {
+    interpreter = ["PowerShell", "-Command"]
+    command     = "az containerapp job update --name caj-odaamh --resource-group ${azurerm_resource_group.runner.name} --subscription ${var.sub_mhcore_id} --scale-rule-name github-runner --scale-rule-type github-runner --scale-rule-metadata owner=${var.github_owner} repos=${var.github_repo} runnerScope=${var.github_runner_scope} targetWorkflowQueueLength=1 labels=azure,container-apps,terraform --scale-rule-auth personalAccessToken=personal-access-token"
   }
 
   depends_on = [module.github_runner]
