@@ -109,7 +109,22 @@ resource "azurerm_role_assignment" "tfstate_contributor" {
 }
 
 # ===============================================================================
+# ===============================================================================
 # AVM Module - GitHub Runner on Container Apps
+# ===============================================================================
+# Known AVM module issues (Azure/avm-ptn-cicd-agents-and-runners ~> 0.5):
+#
+# 1. CAE public_network_access: The module does NOT set public_network_access
+#    on the Container App Environment when use_private_networking=true. This
+#    causes a plan-time validation error on INITIAL creation because the azurerm
+#    provider defaults to "Enabled", which conflicts with internal_load_balancer.
+#    Workaround: Patch .terraform/modules/github_runner/main.container.app.
+#    environment.tf to add: public_network_access = var.use_private_networking ? "Disabled" : null
+#    Once the CAE exists with the correct value in state, subsequent plans work
+#    WITHOUT the patch (the provider reads "Disabled" from the refresh).
+#
+# 2. KEDA labels: The module hardcodes KEDA scaler metadata without the "labels"
+#    field. Fixed below via terraform_data + local-exec (az containerapp job update).
 # ===============================================================================
 
 module "github_runner" {
