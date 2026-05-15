@@ -1,0 +1,89 @@
+# Build Oracle Workshop VM Image using Packer
+# Publishes to Azure Compute Gallery for use by deploy-workshop
+name: 0 - Build Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_version:
+        description: 'Image version (semver, e.g. 1.0.1)'
+        required: true
+        default: '1.0.1'
+
+concurrency:
+  group: build-image
+  cancel-in-progress: false
+
+env:
+  PACKER_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/packer/packer'
+  PACKER_VERSION: '1.11.2'
+
+jobs:
+  build:
+    runs-on: [self-hosted, azure, container-apps, terraform]
+    defaults:
+      run:
+        working-directory: ${{ env.PACKER_DIR }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/packer
+          sparse-checkout-cone-mode: false
+
+      - name: Install Packer
+        run: |
+          cd /tmp
+          curl -sLO "https://releases.hashicorp.com/packer/$PACKER_VERSION/packer_${PACKER_VERSION}_linux_amd64.zip"
+          unzip -o packer_${PACKER_VERSION}_linux_amd64.zip
+          sudo mv packer /usr/local/bin/
+          packer version
+
+      - name: Azure Login
+        run: |
+          az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
+          az account set --subscription ${{ vars.TF_MHCORE_SUBSCRIPTION_ID }}
+          echo "Logged in, subscription: $(az account show --query '{name:name, id:id}' -o json)"
+
+      - name: Ensure Build Resource Group
+        run: |
+          az group create \
+            --name rg-packer-build \
+            --location francecentral \
+            --subscription ${{ vars.TF_MHCORE_SUBSCRIPTION_ID }} \
+            --tags Purpose=PackerBuild ManagedBy=CI 2>/dev/null || true
+
+      - name: Packer Init
+        run: packer init .
+
+      - name: Packer Validate
+        run: |
+          packer validate \
+            -var "subscription_id=${{ vars.TF_MHCORE_SUBSCRIPTION_ID }}" \
+            -var "image_version=${{ github.event.inputs.image_version }}" \
+            .
+
+      - name: Packer Build
+        run: |
+          packer build \
+            -var "subscription_id=${{ vars.TF_MHCORE_SUBSCRIPTION_ID }}" \
+            -var "image_version=${{ github.event.inputs.image_version }}" \
+            -color=false \
+            .
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🖼️ Image Build" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ github.event.inputs.image_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Gallery**: gal_oracle_workshop" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: oracle-workshop-vm" >> $GITHUB_STEP_SUMMARY
+          if [ -f packer-manifest.json ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Manifest" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat packer-manifest.json >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi

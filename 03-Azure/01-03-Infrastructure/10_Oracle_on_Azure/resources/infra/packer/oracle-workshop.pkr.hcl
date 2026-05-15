@@ -26,22 +26,6 @@ packer {
 # Variables
 # ===============================================================================
 
-variable "tenant_id" {
-  type        = string
-  description = "Azure AD tenant ID"
-}
-
-variable "client_id" {
-  type        = string
-  description = "Service Principal client ID"
-}
-
-variable "client_secret" {
-  type        = string
-  description = "Service Principal client secret"
-  sensitive   = true
-}
-
 variable "subscription_id" {
   type        = string
   description = "Azure subscription ID for image storage"
@@ -94,11 +78,9 @@ variable "vm_size" {
 # ===============================================================================
 
 source "azure-arm" "oracle-workshop" {
-  # Authentication - Service Principal (not Azure CLI)
-  tenant_id       = var.tenant_id
-  client_id       = var.client_id
-  client_secret   = var.client_secret
-  subscription_id = var.subscription_id
+  # Authentication — uses active az CLI session (az login --identity for MSI)
+  use_azure_cli_auth = true
+  subscription_id    = var.subscription_id
 
   # Source Image - Ubuntu 24.04 LTS
   os_type         = "Linux"

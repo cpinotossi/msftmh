@@ -4,10 +4,9 @@
 # Copy this file to variables.auto.pkrvars.hcl and fill in your values
 # ===============================================================================
 
-# Azure Authentication (from Service Principal)
-client_id       = "YOUR_CLIENT_ID"
-client_secret   = "YOUR_CLIENT_SECRET"
-tenant_id       = "YOUR_TENANT_ID"
+# Azure Authentication
+# CI: uses az login --identity (MSI) via use_azure_cli_auth=true
+# Local: uses az login (your user) via use_azure_cli_auth=true
 subscription_id = "YOUR_SUBSCRIPTION_ID"
 
 # Location - should match your Compute Gallery location

@@ -33,24 +33,6 @@ packer {
 # Variables
 # ===============================================================================
 
-variable "client_id" {
-  type        = string
-  description = "Azure Service Principal Client ID"
-  sensitive   = true
-}
-
-variable "client_secret" {
-  type        = string
-  description = "Azure Service Principal Client Secret"
-  sensitive   = true
-}
-
-variable "tenant_id" {
-  type        = string
-  description = "Azure Tenant ID"
-  sensitive   = true
-}
-
 variable "subscription_id" {
   type        = string
   description = "Azure Subscription ID"
@@ -103,11 +85,9 @@ variable "vm_size" {
 # ===============================================================================
 
 source "azure-arm" "oracle-workshop" {
-  # Authentication
-  client_id       = var.client_id
-  client_secret   = var.client_secret
-  tenant_id       = var.tenant_id
-  subscription_id = var.subscription_id
+  # Authentication — uses active az CLI session (az login --identity for MSI)
+  use_azure_cli_auth = true
+  subscription_id    = var.subscription_id
 
   # Build VM Configuration
   vm_size = var.vm_size
