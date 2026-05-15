@@ -12,39 +12,125 @@
 # ===============================================================================
 # SHARED RESOURCES — Compute Gallery (sub-mhcore)
 # ===============================================================================
-# SSH key is NOT created here — it's managed in the users/ project.
-# ===============================================================================
 
-module "shared" {
-  source = "../modules/shared"
+resource "azurerm_resource_group" "shared" {
+  provider = azurerm.mhcore
+  name     = "rg-shared-${var.prefix}"
+  location = var.location
+  tags     = var.tags
+}
 
-  providers = {
-    azurerm = azurerm.mhcore
+resource "azurerm_shared_image_gallery" "gallery" {
+  provider            = azurerm.mhcore
+  name                = var.gallery_name
+  resource_group_name = azurerm_resource_group.shared.name
+  location            = azurerm_resource_group.shared.location
+  description         = "Shared image gallery for Oracle Workshop VMs"
+  tags                = var.tags
+}
+
+resource "azurerm_shared_image" "oracle_workshop" {
+  provider                  = azurerm.mhcore
+  name                      = var.image_name
+  gallery_name              = azurerm_shared_image_gallery.gallery.name
+  resource_group_name       = azurerm_resource_group.shared.name
+  location                  = azurerm_resource_group.shared.location
+  os_type                   = "Linux"
+  hyper_v_generation        = "V2"
+  architecture              = "x64"
+  trusted_launch_supported  = true
+
+  identifier {
+    publisher = "OracleWorkshop"
+    offer     = "oracle-tools"
+    sku       = "ubuntu-2404"
   }
 
-  location       = var.location
-  gallery_name   = var.gallery_name
-  image_name     = var.image_name
-  create_ssh_key = false
-  tags           = var.tags
+  tags = var.tags
 }
 
 # ===============================================================================
 # SHARED ODAA — VNet, Subnet, Resource Anchor (sub-mhodaa)
 # ===============================================================================
 
-module "shared_odaa" {
-  source = "../modules/shared-odaa"
+resource "azurerm_resource_group" "shared_odaa" {
+  provider = azurerm.mhodaa
+  name     = "rg-odaa-shared"
+  location = var.location
+  tags     = var.tags
+}
 
-  providers = {
-    azurerm = azurerm.mhodaa
-    azapi   = azapi
+resource "azurerm_virtual_network" "shared_odaa" {
+  provider            = azurerm.mhodaa
+  name                = "vnet-odaa-shared"
+  location            = azurerm_resource_group.shared_odaa.location
+  resource_group_name = azurerm_resource_group.shared_odaa.name
+  address_space       = [var.odaa_vnet_cidr]
+  tags                = var.tags
+}
+
+resource "azurerm_subnet" "shared_odaa" {
+  provider             = azurerm.mhodaa
+  name                 = "snet-odaa-delegated"
+  resource_group_name  = azurerm_resource_group.shared_odaa.name
+  virtual_network_name = azurerm_virtual_network.shared_odaa.name
+  address_prefixes     = [cidrsubnet(var.odaa_vnet_cidr, 8, 0)]
+
+  default_outbound_access_enabled = true
+
+  delegation {
+    name = "oracle-delegation"
+    service_delegation {
+      name = "Oracle.Database/networkAttachments"
+      actions = [
+        "Microsoft.Network/networkinterfaces/*",
+        "Microsoft.Network/virtualNetworks/subnets/join/action"
+      ]
+    }
   }
+}
 
-  location         = var.location
-  vnet_cidr        = var.odaa_vnet_cidr
-  basedb_vnet_cidr = var.basedb_vnet_cidr
-  tags             = var.tags
+resource "azurerm_virtual_network" "basedb" {
+  provider            = azurerm.mhodaa
+  name                = "vnet-odaa-basedb"
+  location            = azurerm_resource_group.shared_odaa.location
+  resource_group_name = azurerm_resource_group.shared_odaa.name
+  address_space       = [var.basedb_vnet_cidr]
+  tags                = var.tags
+}
+
+resource "azurerm_subnet" "basedb" {
+  provider             = azurerm.mhodaa
+  name                 = "snet-odaa-basedb-delegated"
+  resource_group_name  = azurerm_resource_group.shared_odaa.name
+  virtual_network_name = azurerm_virtual_network.basedb.name
+  address_prefixes     = [cidrsubnet(var.basedb_vnet_cidr, 8, 0)]
+
+  default_outbound_access_enabled = true
+
+  delegation {
+    name = "oracle-delegation"
+    service_delegation {
+      name = "Oracle.Database/networkAttachments"
+      actions = [
+        "Microsoft.Network/networkinterfaces/*",
+        "Microsoft.Network/virtualNetworks/subnets/join/action"
+      ]
+    }
+  }
+}
+
+resource "azapi_resource" "resource_anchor" {
+  type      = "Oracle.Database/resourceAnchors@2025-09-01"
+  name      = "anchor-odaa-shared"
+  parent_id = azurerm_resource_group.shared_odaa.id
+  location  = "global"
+
+  body = {}
+
+  lifecycle {
+    ignore_changes = [body]
+  }
 }
 
 # ===============================================================================
@@ -99,8 +185,57 @@ resource "azurerm_role_definition" "odaa_db_creator" {
 
 resource "azurerm_role_assignment" "shared_odaa_group" {
   provider           = azurerm.mhodaa
-  scope              = module.shared_odaa.resource_group_id
+  scope              = azurerm_resource_group.shared_odaa.id
   role_definition_id = azurerm_role_definition.odaa_db_creator.role_definition_resource_id
   principal_id       = var.odaa_user_group_id
   description        = "Allows workshop user group to read/join shared ODAA VNet for DB creation"
+}
+
+# ===============================================================================
+# State migration: inlined shared + shared-odaa modules
+# ===============================================================================
+
+moved {
+  from = module.shared.azurerm_resource_group.shared
+  to   = azurerm_resource_group.shared
+}
+
+moved {
+  from = module.shared.azurerm_shared_image_gallery.gallery
+  to   = azurerm_shared_image_gallery.gallery
+}
+
+moved {
+  from = module.shared.azurerm_shared_image.oracle_workshop
+  to   = azurerm_shared_image.oracle_workshop
+}
+
+moved {
+  from = module.shared_odaa.azurerm_resource_group.shared_odaa
+  to   = azurerm_resource_group.shared_odaa
+}
+
+moved {
+  from = module.shared_odaa.azurerm_virtual_network.shared_odaa
+  to   = azurerm_virtual_network.shared_odaa
+}
+
+moved {
+  from = module.shared_odaa.azurerm_subnet.shared_odaa
+  to   = azurerm_subnet.shared_odaa
+}
+
+moved {
+  from = module.shared_odaa.azurerm_virtual_network.basedb
+  to   = azurerm_virtual_network.basedb
+}
+
+moved {
+  from = module.shared_odaa.azurerm_subnet.basedb
+  to   = azurerm_subnet.basedb
+}
+
+moved {
+  from = module.shared_odaa.azapi_resource.resource_anchor
+  to   = azapi_resource.resource_anchor
 }

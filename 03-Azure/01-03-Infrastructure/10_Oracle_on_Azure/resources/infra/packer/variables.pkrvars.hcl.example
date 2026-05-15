@@ -1,28 +1,29 @@
 # ===============================================================================
-# Packer Variables File
+# Packer Variables - Oracle Workshop Image
 # ===============================================================================
-# Copy this file to variables.pkrvars.hcl and fill in your values.
-#
-# Usage:
-#   packer build -var-file=variables.pkrvars.hcl oracle-workshop.pkr.hcl
+# Copy this file to variables.auto.pkrvars.hcl and fill in your values
 # ===============================================================================
 
 # Azure Authentication
 # CI: uses az login --identity (MSI) via use_azure_cli_auth=true
 # Local: uses az login (your user) via use_azure_cli_auth=true
+subscription_id = "YOUR_SUBSCRIPTION_ID"
 
-# Azure Subscription
-subscription_id = "<your-subscription-id>"
-
-# Location
+# Location - should match your Compute Gallery location
 location = "francecentral"
 
-# Compute Gallery
-gallery_name           = "gal_oracle_workshop"
-gallery_resource_group = "rg-shared-workshop"
-image_name             = "oracle-workshop-vm"
-image_version          = "1.0.0"
+# Resource Group containing the Compute Gallery
+resource_group = "rg-shared-workshop"
 
-# Build Configuration
-resource_group = "rg-packer-build"
-vm_size        = "Standard_D2s_v5"
+# Separate Resource Group used for temporary Packer build resources (pkr*)
+build_resource_group = "rg-packer-build"
+
+# Azure Compute Gallery settings
+gallery_name = "gal_oracle_workshop"
+image_name   = "oracle-workshop-vm"
+
+# Image version (increment for each new build)
+image_version = "1.0.0"
+
+# VM size for building (D2s_v5 is sufficient, use larger for faster builds)
+vm_size = "Standard_D2s_v5"

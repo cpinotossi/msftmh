@@ -25,7 +25,7 @@ output "user_vm_info" {
 output "user_odaa_rgs" {
   description = "ODAA resource group names for all users"
   value = {
-    for key, odaa in module.user_odaa : "user${key}" => odaa.resource_group_name
+    for key, rg in azurerm_resource_group.user_odaa : "user${key}" => rg.name
   }
 }
 

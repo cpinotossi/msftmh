@@ -10,17 +10,17 @@
 
 output "image_id" {
   description = "ID of the Image Definition"
-  value       = module.shared.image_id
+  value       = azurerm_shared_image.oracle_workshop.id
 }
 
 output "gallery_id" {
   description = "ID of the Compute Gallery"
-  value       = module.shared.gallery_id
+  value       = azurerm_shared_image_gallery.gallery.id
 }
 
 output "gallery_name" {
   description = "Name of the Compute Gallery"
-  value       = module.shared.gallery_name
+  value       = azurerm_shared_image_gallery.gallery.name
 }
 
 # ===============================================================================
@@ -29,42 +29,42 @@ output "gallery_name" {
 
 output "odaa_vnet_id" {
   description = "ID of the shared ODAA VNet"
-  value       = module.shared_odaa.vnet_id
+  value       = azurerm_virtual_network.shared_odaa.id
 }
 
 output "odaa_vnet_name" {
   description = "Name of the shared ODAA VNet"
-  value       = module.shared_odaa.vnet_name
+  value       = azurerm_virtual_network.shared_odaa.name
 }
 
 output "odaa_resource_group_name" {
   description = "Name of the shared ODAA resource group"
-  value       = module.shared_odaa.resource_group_name
+  value       = azurerm_resource_group.shared_odaa.name
 }
 
 output "odaa_subnet_id" {
   description = "ID of the shared ODAA delegated subnet"
-  value       = module.shared_odaa.subnet_id
+  value       = azurerm_subnet.shared_odaa.id
 }
 
 output "basedb_vnet_id" {
   description = "ID of the shared BaseDB VNet"
-  value       = module.shared_odaa.basedb_vnet_id
+  value       = azurerm_virtual_network.basedb.id
 }
 
 output "basedb_vnet_name" {
   description = "Name of the shared BaseDB VNet"
-  value       = module.shared_odaa.basedb_vnet_name
+  value       = azurerm_virtual_network.basedb.name
 }
 
 output "basedb_subnet_id" {
   description = "ID of the shared BaseDB delegated subnet"
-  value       = module.shared_odaa.basedb_subnet_id
+  value       = azurerm_subnet.basedb.id
 }
 
 output "resource_anchor_id" {
   description = "ID of the Oracle Resource Anchor"
-  value       = module.shared_odaa.resource_anchor_id
+  value       = azapi_resource.resource_anchor.id
 }
 
 # ===============================================================================

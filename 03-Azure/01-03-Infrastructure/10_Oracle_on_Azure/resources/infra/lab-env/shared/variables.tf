@@ -44,6 +44,12 @@ variable "location" {
 # Compute Gallery
 # ===============================================================================
 
+variable "prefix" {
+  description = "Prefix for shared resource names"
+  type        = string
+  default     = "workshop"
+}
+
 variable "gallery_name" {
   description = "Name of the Azure Compute Gallery"
   type        = string

@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PACKER_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/packer/packer'
+  PACKER_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/packer'
   PACKER_VERSION: '1.11.2'
 
 jobs:

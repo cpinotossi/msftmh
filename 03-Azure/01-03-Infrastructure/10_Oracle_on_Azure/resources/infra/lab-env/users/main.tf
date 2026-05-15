@@ -74,21 +74,35 @@ module "user_vm" {
 # USER ODAA RGs — One per user (sub-mhodaa)
 # ===============================================================================
 
-module "user_odaa" {
+resource "azurerm_resource_group" "user_odaa" {
   for_each = local.user_keys
-  source   = "../modules/user-odaa"
+  provider = azurerm.mhodaa
+  name     = "rg-odaa-user${each.key}"
+  location = var.location
+  tags     = merge(var.tags, { UserIndex = tonumber(each.key) })
+}
 
-  providers = {
-    azurerm = azurerm.mhodaa
-  }
+resource "azurerm_role_assignment" "user_odaa_db_creator" {
+  for_each           = { for k, v in local.user_keys : k => k if lookup(var.user_object_ids, k, null) != null }
+  provider           = azurerm.mhodaa
+  scope              = azurerm_resource_group.user_odaa[each.key].id
+  role_definition_id = local.shared.odaa_role_definition_resource_id
+  principal_id       = var.user_object_ids[each.key]
+  description        = "Allows Entra ID user to create Oracle ADB/BaseDB in ${azurerm_resource_group.user_odaa[each.key].name}"
+}
 
-  user_index = tonumber(each.key)
-  location   = var.location
-  tags       = var.tags
+# ===============================================================================
+# State migration: user-odaa module inlined
+# ===============================================================================
 
-  # RBAC: Entra ID user gets Oracle Database Creator on their ODAA RG
-  entra_id_user_object_id = lookup(var.user_object_ids, each.key, null)
-  odaa_role_definition_id = local.shared.odaa_role_definition_resource_id
+moved {
+  from = module.user_odaa["00"].azurerm_resource_group.odaa
+  to   = azurerm_resource_group.user_odaa["00"]
+}
+
+moved {
+  from = module.user_odaa["00"].azurerm_role_assignment.odaa_db_creator[0]
+  to   = azurerm_role_assignment.user_odaa_db_creator["00"]
 }
 
 # ===============================================================================
