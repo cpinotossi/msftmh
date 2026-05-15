@@ -51,6 +51,11 @@ module "shared_odaa" {
 # CUSTOM ROLE: Oracle Database Creator (least-privilege for ADB + BaseDB)
 # ===============================================================================
 
+import {
+  to = azurerm_role_definition.odaa_db_creator
+  id = "/subscriptions/${var.mhodaa_subscription_id}/providers/Microsoft.Authorization/roleDefinitions/c02191a8-7480-6430-d9fc-2d006164a261|/subscriptions/${var.mhodaa_subscription_id}"
+}
+
 resource "azurerm_role_definition" "odaa_db_creator" {
   provider = azurerm.mhodaa
 
