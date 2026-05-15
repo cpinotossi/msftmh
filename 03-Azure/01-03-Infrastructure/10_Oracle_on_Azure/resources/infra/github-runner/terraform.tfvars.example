@@ -1,0 +1,60 @@
+# ===============================================================================
+# Terraform Variables - GitHub Actions Runner (EXAMPLE)
+# ===============================================================================
+# Copy this file to terraform.tfvars and fill in the values
+# ===============================================================================
+
+# ===============================================================================
+# Azure Authentication (same as main deployment)
+# ===============================================================================
+
+tenant_id     = "your-tenant-id"
+client_id     = "your-client-id"
+client_secret = "your-client-secret"
+
+# ===============================================================================
+# Subscription Configuration (for RBAC assignments)
+# ===============================================================================
+
+# sub-mhcore - Compute Gallery (Runner wird hier deployed)
+sub_mhcore_id = "subscription-id-for-sub-mhcore"
+
+# sub-mh0 - Workshop VMs, VNets
+sub_mh0_id = "subscription-id-for-sub-mh0"
+
+# sub-mhodaa - Shared ODAA VNet, Anchors, User RGs
+sub_mhodaa_id = "subscription-id-for-sub-mhodaa"
+
+# ===============================================================================
+# Location
+# ===============================================================================
+
+location = "francecentral"
+
+# ===============================================================================
+# GitHub Configuration
+# ===============================================================================
+
+# GitHub PAT - Create at https://github.com/settings/tokens
+# Required scopes: repo, workflow, admin:org (if using org-level runner)
+github_pat = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# GitHub owner (organization or username)
+github_owner = "your-org-or-username"
+
+# Repository name (without owner)
+github_repo = "your-repo-name"
+
+# Runner scope: "repo" for single repo, "org" for organization-wide
+github_runner_scope = "repo"
+
+# ===============================================================================
+# Tags
+# ===============================================================================
+
+tags = {
+  Project     = "OracleWorkshop"
+  ManagedBy   = "Terraform"
+  Component   = "GitHubRunner"
+  Environment = "Workshop"
+}
