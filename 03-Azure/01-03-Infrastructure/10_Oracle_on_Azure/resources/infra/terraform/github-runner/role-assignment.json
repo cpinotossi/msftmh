@@ -1,6 +1,0 @@
-{
-  "@odata.type": "#microsoft.graph.unifiedRoleAssignment",
-  "principalId": "ae168ce6-4d2e-4a7d-89de-ecd95639de10",
-  "roleDefinitionId": "966707d0-3269-4727-9be2-8c3a10f19b9d",
-  "directoryScopeId": "/"
-}
