@@ -1,8 +1,0 @@
-# Add to .dockerignore
-.git
-.gitignore
-README.md
-*.md
-.vscode/
-.DS_Store
-Thumbs.db
