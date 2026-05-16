@@ -21,7 +21,7 @@ on:
           - users
         default: 'shared'
       import_file:
-        description: 'Path to import list file in repo (e.g. lab-env/import-list.txt). Overrides imports input.'
+        description: 'Path to import list file in repo (e.g. import-list.txt). Overrides imports input.'
         required: false
         type: string
         default: ''
@@ -41,7 +41,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/lab-env/${{ inputs.project }}'
+  TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/${{ inputs.project }}'
   TF_VERSION: '1.13.4'
   TF_VAR_tenant_id: ${{ vars.TF_TENANT_ID }}
   TF_VAR_mhcore_subscription_id: ${{ vars.TF_MHCORE_SUBSCRIPTION_ID }}

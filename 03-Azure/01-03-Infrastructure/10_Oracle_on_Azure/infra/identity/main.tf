@@ -71,9 +71,9 @@ module "entra_id_users" {
 # ===============================================================================
 
 locals {
-  # Output to lab-env folder where the workshop configuration lives
-  # path.root is identity/, so we go up one level then into lab-env/
-  user_credentials_output_path = "${path.root}/../lab-env/user_credentials.json"
+  # Output to infra root where the workshop configuration lives
+  # path.root is identity/, so we go up one level
+  user_credentials_output_path = "${path.root}/../user_credentials.json"
 }
 
 resource "local_file" "user_credentials" {

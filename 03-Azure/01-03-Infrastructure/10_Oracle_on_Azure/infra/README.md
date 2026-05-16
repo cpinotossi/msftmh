@@ -7,14 +7,14 @@ infra/
 ├── ansible/           # Ansible Playbooks (oracle-tools)
 ├── github-runner/     # Self-hosted Runner (einmalig, lokal)
 ├── identity/          # Entra ID Users (einmalig, lokal)
-├── lab-env/
-│   ├── shared/        # Shared Infra: Gallery, ODAA VNets, Role Defs
-│   ├── users/         # Per-User: VMs, ODAA RGs, Peerings
-│   └── modules/       # Terraform Module (user-vm, vnet-peering)
-├── modules/
-│   └── entra-id/      # Entra ID Modul (verwendet von identity/)
+├── modules/           # Terraform Module
+│   ├── entra-id/      #   Entra ID (verwendet von identity/)
+│   ├── user-vm/       #   User VM (verwendet von users/)
+│   └── vnet-peering/  #   VNet Peering (verwendet von users/)
 ├── packer/            # VM Image Build (Packer + Ansible)
-└── scripts/           # PowerShell Utility Scripts
+├── scripts/           # PowerShell Utility Scripts
+├── shared/            # Shared Infra: Gallery, ODAA VNets, Role Defs
+└── users/             # Per-User: VMs, ODAA RGs, Peerings
 ```
 
 ## Architektur
@@ -46,14 +46,14 @@ Alle Workflows werden via `git commit` + `push` getriggert. Die Reihenfolge ist 
 
 ### Schritt 1: Users zurücksetzen (Passwörter + MFA)
 
-Wert des Atribute "mh-name" änderung im File `lab-env/users/user_credentials.template.json`. Das triggert den Reset-Workflow.
+Wert des Atribute "mh-name" änderung im File `users/user_credentials.template.json`. Das triggert den Reset-Workflow.
 
 ```pwsh
 # z.B. mh-name setzen oder beliebige Änderung am Template
 cd 03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra
-code lab-env/users/user_credentials.template.json
+code users/user_credentials.template.json
 
-git add lab-env/users/user_credentials.template.json
+git add users/user_credentials.template.json
 git commit -m "FRA-MH-20260421"
 git push
 # Workflow status prüfen
@@ -66,12 +66,12 @@ gh run download $(gh run list --workflow="odaa-reset-users.yml" --repo cpinotoss
 
 ### Schritt 2: Workshop deployen (Shared + User VMs)
 
-Änderung an `lab-env/users/terraform.tfvars` (z.B. `user_count`) triggert den Deploy-Workshop-Workflow.
+Änderung an `users/terraform.tfvars` (z.B. `user_count`) triggert den Deploy-Workshop-Workflow.
 
 ```pwsh
-code lab-env/users/terraform.tfvars
+code users/terraform.tfvars
 # user_count anpassen, dann:
-git add lab-env/users/terraform.tfvars
+git add users/terraform.tfvars
 git commit -m "deploy workshop user_count=25"
 git push
 # Workflow status prüfen

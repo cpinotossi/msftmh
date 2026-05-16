@@ -82,9 +82,9 @@ $ErrorActionPreference = 'Stop'
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if (-not $CredentialsFile) {
-    # Single source of truth: lab-env/user_credentials.json
+    # Single source of truth: infra/user_credentials.json
     $scriptDir = $PSScriptRoot
-    $CredentialsFile = Join-Path $scriptDir "..\lab-env\user_credentials.json"
+    $CredentialsFile = Join-Path $scriptDir "..\user_credentials.json"
     
     if (-not (Test-Path $CredentialsFile)) {
         throw "user_credentials.json not found at: $CredentialsFile`nRun identity/ terraform first to create users."

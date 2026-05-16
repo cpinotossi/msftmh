@@ -16,7 +16,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/lab-env/users/user_credentials.template.json'
+      - '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/users/user_credentials.template.json'
 
 concurrency:
   group: workshop
@@ -24,8 +24,8 @@ concurrency:
 
 env:
   SCRIPTS_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/scripts'
-  CREDS_TEMPLATE: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/lab-env/users/user_credentials.template.json'
-  CREDS_FILE: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/lab-env/user_credentials.json'
+  CREDS_TEMPLATE: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/users/user_credentials.template.json'
+  CREDS_FILE: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/user_credentials.json'
 
 jobs:
   rotate:
