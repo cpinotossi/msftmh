@@ -1,8 +1,8 @@
-# 🔌 Challenge: Perform Connectivity Tests on Oracle Database@azure [ODAA] Autonoumous Database
+# 🔌 Challenge: Perform Connectivity Tests on Oracle Database@azure [ODAA] Autonomous Database
 
 [Back to workspace README](../../README.md)
 
-ODAA Autonoumous Database are so called PaaS (Platform as a Service) offerings, where the underlying infrastructure is fully managed by Microsoft and Oracle.
+ODAA Autonomous Database are so called PaaS (Platform as a Service) offerings, where the underlying infrastructure is fully managed by Microsoft and Oracle.
 
 Installing tools like iperf, sockperf, etc is not possible on the ODAA ADB instance itself, as you would do it on a VM or Bare Metal server.
 

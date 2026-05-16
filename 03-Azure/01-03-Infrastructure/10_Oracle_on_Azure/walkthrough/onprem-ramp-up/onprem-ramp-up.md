@@ -269,7 +269,7 @@ ogghack-goldengate-microhack-sample-ogg-787f954698-kzjpl          1/1     Runnin
 
 Use Key CTRL+C to exit the watch command.
 
-> IMPORTANT: While you are waiting feel free to already work on the next challenge [Challenge 5: Measure Network Performance to Your Oracle Database@Azure Autonomous Database](../perf-test-odaa/perf-test-odaa.md).
+> IMPORTANT: While you are waiting feel free to already work on the next challenge [Challenge 5: Measure Network Performance to Your Oracle Database@Azure Autonomous Database](../perf-test-odaa-adb/perf-test-odaa-adb.md).
 
 ### 🔌 Connect to the ADB Oracle Database
 
@@ -429,12 +429,6 @@ grant create session, resource to SH2;
 exit
 ~~~
 
-~~~sql
-grant create session, resource to SH2;
-
-exit
-~~~
-
 Connect as User SH2 into the ADB database
 ~~~bash
 # Reconnect into ADB with admin via sqlplus, replace the TNS connection string with your own
@@ -474,7 +468,7 @@ SELECT COUNT(*) FROM SALES_COPY;
 
 ~~~sql
 -- create copy from SH.SALES to SH.SALES_COPY
-INSERT INTO TABLE SALES_COPY (SELECT * FROM SH.SALES);
+INSERT INTO SALES_COPY (SELECT * FROM SH.SALES);
 -- count the records in SH.SALES_COPY table
 SELECT COUNT(*) FROM SALES_COPY;
 ~~~

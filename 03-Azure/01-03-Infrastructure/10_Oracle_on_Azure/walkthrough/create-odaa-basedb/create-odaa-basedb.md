@@ -7,7 +7,7 @@
 3. Deploy an Oracle BaseDB in Azure.
    1. Important: Choose the region <font color=red>FRANCE CENTRAL</font>
    2. Use in the Networking section <font color=red>Managed private virtual network IP only</font>
-4. Furthermore, you will deploy in this chapter an ADB database via the Azure Portal.
+4. Furthermore, you will deploy in this chapter a BaseDB database via the Azure Portal.
 5. Finally, check if the existing VNet peering between the AKS and database subscriptions is available and correctly configured.
 
 ## 🛰️ Delegated Subnet Design (Prerequisites)
@@ -119,7 +119,7 @@ Inside the resource group select your newly created  network anchor.
 az config set extension.dynamic_install_allow_preview=true
 az oracle-database resource-anchor list -g anchorodaa 
 $anchoreId=az oracle-database resource-anchor show -g anchorodaa -n anchorodaa --query id -o tsv
-$subnetId=az network vnet subnet show -g rg-odaa-user02 -n snet-odaa-user02 --vnet-name vnet-odaa-user02 --query id -o tsv=az network vnet subnet show -g rg-odaa-user02 -n snet-odaa-user02 --vnet-name vnet-odaa-user02 --query id -o tsv
+$subnetId=az network vnet subnet show -g rg-odaa-user02 -n snet-odaa-user02 --vnet-name vnet-odaa-user02 --query id -o tsv
 ~~~
 
 ~~~json
@@ -162,13 +162,13 @@ az oracle-database network-anchor create -n nw-anchor-user02 -g rg-odaa-user02 -
 
 In the Azure portal, search for Oracle Services and select **Oracle Database@Azure**.
 
-![Azure portal Oracle Database@Azure](media/basedb.2.png)
+![Azure portal Oracle Database@Azure](media/basedb2.png)
 
 ### Select Oracle Autonomous Database
 
 Select **Create Oracle Autonomous Database** and "create" to start the creation of the Autonomous Database.
 
-![Azure portal Oracle Autonomous Database](media/basedb.3.png)
+![Azure portal Oracle Autonomous Database](media/basedb3.png)
 
 ### Define Azure Basics
 
