@@ -1,17 +1,20 @@
-# Oracle Workshop
+# Oracle Database @ Azure - Workshop Infrastructure
 
 ## Struktur
 
-```
-terraform/
-├── identity/          # Entra ID Users (einmalig, lokal)
+```text
+infra/
+├── ansible/           # Ansible Playbooks (oracle-tools)
 ├── github-runner/     # Self-hosted Runner (einmalig, lokal)
+├── identity/          # Entra ID Users (einmalig, lokal)
 ├── lab-env/
 │   ├── shared/        # Shared Infra: Gallery, ODAA VNets, Role Defs
 │   ├── users/         # Per-User: VMs, ODAA RGs, Peerings
-│   └── modules/       # Terraform Module (user-vm, user-odaa, shared-odaa, ...)
-├── scripts/           # manage-users.ps1, deploy.ps1, ...
-└── packer/            # VM Image Build
+│   └── modules/       # Terraform Module (user-vm, vnet-peering)
+├── modules/
+│   └── entra-id/      # Entra ID Modul (verwendet von identity/)
+├── packer/            # VM Image Build (Packer + Ansible)
+└── scripts/           # PowerShell Utility Scripts
 ```
 
 ## Architektur
@@ -47,7 +50,7 @@ Wert des Atribute "mh-name" änderung im File `lab-env/users/user_credentials.te
 
 ```pwsh
 # z.B. mh-name setzen oder beliebige Änderung am Template
-cd 03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/terraform
+cd 03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra
 code lab-env/users/user_credentials.template.json
 
 git add lab-env/users/user_credentials.template.json

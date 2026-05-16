@@ -28,7 +28,7 @@ $cidr="10.0.0.0"
 > ℹ️ **NOTE:** This would be created manually during the workshop.
 
 ~~~bash
-az deployment sub create -n $prefix -l $location -f ./resources/infra/bicep/odaa/main.bicep -p location=$location prefix=$prefix postfix=$postfix password=$password cidr=$cidr
+az deployment sub create -n $prefix -l $location -f ./infra/bicep/odaa/main.bicep -p location=$location prefix=$prefix postfix=$postfix password=$password cidr=$cidr
 # Verify the created resources, list all resource inside the resource group
 az resource list -g $rgName -o table --query "[].{Name:name, Type:type}"
 ~~~

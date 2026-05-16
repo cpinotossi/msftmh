@@ -157,4 +157,4 @@ az account set --subscription <subscription-id>
 
 - `ggfabric.yaml` - Helm values file containing image configurations
 - `resources/gg-bigdata-build/` - GoldenGate build resources
-- `resources/infra/` - Infrastructure deployment files
+- `infra/` - Infrastructure deployment files

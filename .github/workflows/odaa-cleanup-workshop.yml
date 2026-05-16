@@ -26,9 +26,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/lab-env/users'
-  SCRIPTS_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/scripts'
-  CREDS_FILE: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra/lab-env/user_credentials.json'
+  TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/lab-env/users'
+  SCRIPTS_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/scripts'
+  CREDS_FILE: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/lab-env/user_credentials.json'
   TF_VERSION: '1.13.4'
   TF_VAR_tenant_id: ${{ vars.TF_TENANT_ID }}
   TF_VAR_mh0_subscription_id: ${{ vars.TF_MH0_SUBSCRIPTION_ID }}
@@ -97,7 +97,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
-            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra
           sparse-checkout-cone-mode: false
 
       - name: Azure Login
@@ -132,7 +132,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
-            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/resources/infra
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra
           sparse-checkout-cone-mode: false
 
       - name: Install Terraform
