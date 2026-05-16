@@ -72,7 +72,7 @@ Update Complete. ⎈Happy Helming!⎈
 # retrieve the external IP of the nginx ingress controller
 $UserName = "user00" # replace with your user name
 # create a copy of the template file
-cp resources/template/gghack.yaml .
+cp infra/scripts/gghack.yaml .
 # replace the placeholder with the actual external IP
 (Get-Content gghack.yaml) -replace '<USER-NAME>', $UserName.Trim() | Set-Content gghack.yaml
 # show line 44 till 50 with powershell of gghack.yaml

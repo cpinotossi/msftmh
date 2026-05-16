@@ -15,7 +15,7 @@ location = "francecentral"
 # User Count — set this to control how many users to deploy (0-25)
 # ===============================================================================
 
-user_count = 0
+user_count = 2
 
 # ===============================================================================
 # VM Configuration

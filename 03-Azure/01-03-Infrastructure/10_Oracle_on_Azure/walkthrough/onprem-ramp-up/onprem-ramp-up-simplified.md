@@ -88,7 +88,7 @@ az account set --subscription "sub-team0"
 | `-AKSClusterName` | No | AKS cluster name (auto-detected from username) |
 | `-SkipAKSConnection` | No | Skip if already connected to AKS |
 | `-Uninstall` | No | Remove existing deployment first |
-| `-TemplateFile` | No | Custom template path (default: `../../resources/template/gghack.yaml`) |
+| `-TemplateFile` | No | Custom template path (default: `../../infra/scripts/gghack.yaml`) |
 
 > 💡 **Note**: The script uses the existing `gghack.yaml` template without modifying it. Your user-specific values are applied via Helm `--set` parameters at deployment time.
 

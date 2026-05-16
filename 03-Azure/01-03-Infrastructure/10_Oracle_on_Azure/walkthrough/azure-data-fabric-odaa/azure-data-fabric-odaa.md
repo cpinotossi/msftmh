@@ -45,7 +45,7 @@ Once you have the external IP address, replace the placeholder in the gghack.yam
 # get the external IP of the ingress controller and strip spaces
 $EXTIP = (kubectl get service -n ingress-nginx -o jsonpath='{range .items[*]}{.status.loadBalancer.ingress[*].ip} {end}') -replace '\s', ''
 # create a copy of the template file
-cp resources/template/ggfabric.yaml .
+cp infra/scripts/ggfabric.yaml .
 # replace the placeholder with the actual external IP
 (Get-Content ggfabric.yaml) -replace 'xxx-xxx-xxx-xxx', $EXTIP.Trim() | Set-Content ggfabric.yaml
 code ggfabric.yaml

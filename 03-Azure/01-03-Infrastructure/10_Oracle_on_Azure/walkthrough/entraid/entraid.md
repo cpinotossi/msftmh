@@ -220,7 +220,7 @@ $token=az account get-access-token --resource 'https://cptazure.org/7d22ece1-dd6
 $token=az account get-access-token --scope "https://cptazure.org/7d22ece1-dd60-4279-a911-4b7b95934f2e/.default" --query accessToken -o tsv
 $token | Out-File -FilePath .\misc\token.txt -Encoding ascii
 # view the jwt content
-./resources/scripts/jwt.ps1 -Jwt $token 
+./infra/scripts/jwt.ps1 -Jwt $token 
 # write token to file
 $token | Out-File -FilePath .\misc\token.txt -Encoding ascii
 code .\misc\token.txt
