@@ -1,7 +1,7 @@
 # Cleanup Workshop - Run after workshop ends
 #
 # This workflow:
-# 1. Rotates ALL passwords (invalidates old credentials)
+# 1. Resets ALL passwords + MFA (invalidates old credentials)
 # 2. Removes user VMs by setting user_count=0 (shared resources remain)
 #
 # IMPORTANT: Delete all Oracle databases manually BEFORE running!
@@ -36,6 +36,11 @@ env:
   TF_VAR_tf_state_storage: ${{ vars.TF_STATE_STORAGE }}
   TF_VAR_tf_state_rg: ${{ vars.TF_STATE_RG }}
   TF_VAR_tf_state_container: ${{ vars.TF_STATE_CONTAINER }}
+  OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+  OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+  OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+  OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+  OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
 
 jobs:
   validate:
@@ -84,7 +89,7 @@ jobs:
           echo "✅ No Oracle databases found"
 
   rotate-passwords:
-    name: Rotate Passwords (Invalidate)
+    name: Reset Passwords & MFA (Invalidate)
     needs: [validate, check-oracle]
     if: always() && needs.validate.result == 'success' && (needs.check-oracle.result == 'success' || needs.check-oracle.result == 'skipped')
     runs-on: [self-hosted, azure, container-apps, terraform]
@@ -103,21 +108,14 @@ jobs:
       - name: Azure Login
         run: az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
 
-      - name: Rotate Passwords
+      - name: Reset Passwords & MFA
         shell: pwsh
         run: |
           $credsFile = Join-Path $env:GITHUB_WORKSPACE "${{ env.CREDS_FILE }}"
           ./manage-users.ps1 `
-            -Action "rotate-passwords" `
+            -Action "reset-all" `
             -CredentialsFile $credsFile `
             -EventName "cleanup-$(Get-Date -Format 'yyyy-MM-dd')"
-
-  # Note: MFA reset requires Microsoft Graph API permissions that 
-  # Managed Identity doesn't support well. Skip for now or run manually.
-  # reset-mfa:
-  #   name: Reset MFA
-  #   needs: rotate-passwords
-  #   ...
 
   destroy:
     name: Destroy Infrastructure
@@ -213,3 +211,35 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Manual Steps Required" >> $GITHUB_STEP_SUMMARY
           echo "- ⚠️ Reset MFA manually if needed (Portal → Users → Authentication methods)" >> $GITHUB_STEP_SUMMARY
+
+  cleanup-oci:
+    name: Cleanup OCI Networking
+    needs: destroy
+    runs-on: [self-hosted, azure, container-apps, terraform]
+
+    defaults:
+      run:
+        working-directory: ${{ env.SCRIPTS_DIR }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra
+          sparse-checkout-cone-mode: false
+
+      - name: Install OCI CLI
+        run: pip install -q oci-cli
+
+      - name: Cleanup OCI VCNs and NSGs
+        run: |
+          chmod +x cleanup-oci-networking.sh
+          DRY_RUN=false ./cleanup-oci-networking.sh
+
+      - name: OCI Cleanup Summary
+        if: always()
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### OCI Networking Cleanup" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Orphaned NSGs deleted" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Orphaned VCNs deleted (incl. subnets, gateways, route tables)" >> $GITHUB_STEP_SUMMARY
