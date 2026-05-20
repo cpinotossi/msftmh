@@ -1,4 +1,4 @@
-﻿![ODAA microhack logo](media/logo_ODAA_microhack_1900x300.jpg)
+![ODAA microhack logo](media/logo_ODAA_microhack_1900x300.jpg)
 
 #  Microhack - Oracle Database @ Azure (ODAA)
 
