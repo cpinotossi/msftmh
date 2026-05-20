@@ -111,7 +111,13 @@ jobs:
       - name: Reset Passwords & MFA
         shell: pwsh
         run: |
+          # Use template as source (contains all user UPNs and object IDs)
           $credsFile = Join-Path $env:GITHUB_WORKSPACE "${{ env.CREDS_FILE }}"
+          if (-not (Test-Path $credsFile)) {
+            $templateFile = Join-Path $env:GITHUB_WORKSPACE "03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/users/user_credentials.template.json"
+            Write-Host "Credentials file not found, using template: $templateFile"
+            Copy-Item $templateFile $credsFile
+          }
           ./manage-users.ps1 `
             -Action "reset-all" `
             -CredentialsFile $credsFile `
