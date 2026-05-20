@@ -10,7 +10,7 @@ Builds a fully configured Ubuntu 24.04 VM image with pre-installed Oracle tools 
 | **Oracle DB** | SQL*Plus | 23.5 | Oracle command-line SQL tool |
 | **Oracle DB** | SQLcl | 24.3 | Modern SQL command-line with scripting |
 | **Oracle DB** | rwloadsim/connping | 3.2.1 | Connection latency testing |
-| **Oracle DB** | adbping | - | ADB latency testing (placeholder*) |
+| **Oracle DB** | adbping | 23.01 | ADB latency testing (pre-installed) |
 | **CLI** | Azure CLI | latest | Azure management |
 | **CLI** | OCI CLI | latest | Oracle Cloud management |
 | **Runtime** | Java | 17 | OpenJDK for SQLcl |
@@ -18,7 +18,7 @@ Builds a fully configured Ubuntu 24.04 VM image with pre-installed Oracle tools 
 | **Tools** | Network diagnostics | - | dig, traceroute, netcat, tcpdump |
 | **Tools** | Utilities | - | git, jq, vim, nano, htop, tmux |
 
-> *adbping requires manual download from Oracle Support (Doc ID 2863450.1)
+> adbping binary sourced from Oracle Support (Doc ID 2863450.1), bundled in `files/adbping.zip`
 
 ## Prerequisites
 

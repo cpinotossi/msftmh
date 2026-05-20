@@ -6,13 +6,7 @@ ODAA Autonomous Database are so called PaaS (Platform as a Service) offerings, w
 
 Installing tools like iperf, sockperf, etc is not possible on the ODAA ADB instance itself, as you would do it on a VM or Bare Metal server.
 
-The following exercise will use the oracle instant client running inside your Azure Virtual Machine to perform connectivity and performance tests towards the ODAA ADB instance. We will use the `adbping` and `connping` tools provided by Oracle for this purpose.
-
-> [!NOTE]
-> **adbping** requires manual installation. The Virtual Machine image includes only a placeholder script. To install the actual binary, download it from [Oracle Support (Doc ID 2863450.1)](https://support.oracle.com/support/?kmContentId=2863450), upload the zip to the Virtual Machine, extract it to `/opt/oracle/adbping`, and run:
-> ```bash
-> sudo ln -sf /opt/oracle/adbping/adbping /usr/local/bin/adbping
-> ```
+The following exercise will use the oracle instant client running inside your Azure Virtual Machine to perform connectivity and performance tests towards the ODAA ADB instance. We will use the `adbping` and `connping` tools provided by Oracle for this purpose. Both tools are pre-installed on the Virtual Machine image.
 
 ## Get your Azure Virtual Machine Public IP
 

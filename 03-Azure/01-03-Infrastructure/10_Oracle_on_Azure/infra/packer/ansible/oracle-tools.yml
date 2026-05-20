@@ -355,31 +355,55 @@
       failed_when: not connping_link.stat.exists
 
     # =========================================================================
-    # adbping Installation (requires manual upload of zip to VM)
+    # adbping Installation (from pre-uploaded zip)
     # =========================================================================
 
-    - name: Create adbping placeholder script
-      copy:
-        content: |
-          #!/bin/bash
-          # adbping - Oracle ADB Latency Testing Tool
-          # 
-          # This tool requires manual installation from Oracle Support.
-          # Download: https://support.oracle.com/support/?kmContentId=2863450
-          #
-          # After downloading the zip file, extract it to {{ adbping_dir }}
-          # and this script will be replaced with the actual adbping binary.
-          #
-          echo "ERROR: adbping not installed yet."
-          echo ""
-          echo "To install adbping:"
-          echo "1. Download from Oracle Support (Doc ID 2863450.1)"
-          echo "2. Upload the zip to this VM"
-          echo "3. Extract to {{ adbping_dir }}"
-          echo "4. Run: sudo ln -sf {{ adbping_dir }}/adbping /usr/local/bin/adbping"
-          exit 1
-        dest: "/usr/local/bin/adbping"
+    - name: Extract adbping archive
+      unarchive:
+        src: /tmp/adbping.zip
+        dest: "{{ adbping_dir }}"
+        remote_src: true
+
+    - name: Install adbping binary to PATH
+      file:
+        src: "{{ adbping_dir }}/adbping"
+        dest: /usr/local/bin/adbping
+        state: link
+        force: true
+        follow: false
+
+    - name: Set adbping executable permissions
+      file:
+        path: "{{ adbping_dir }}/adbping"
         mode: '0755'
+
+    - name: Install adbping JDBC libraries
+      copy:
+        src: "{{ adbping_dir }}/{{ item }}"
+        dest: "/usr/local/lib/{{ item }}"
+        remote_src: true
+        mode: '0644'
+      loop:
+        - ojdbc8.jar
+        - ucp.jar
+        - oraclepki.jar
+        - osdt_cert.jar
+        - osdt_core.jar
+
+    - name: Install adbping Java classes
+      copy:
+        src: "{{ adbping_dir }}/{{ item }}"
+        dest: "/usr/local/lib/{{ item }}"
+        remote_src: true
+        mode: '0644'
+      loop:
+        - ConnectAndSQLExecTest.class
+        - ConnectAndSQLExecTest$Worker.class
+
+    - name: Clean up adbping archive
+      file:
+        path: /tmp/adbping.zip
+        state: absent
 
     # =========================================================================
     # Azure CLI Installation
@@ -527,7 +551,7 @@
           1. Oracle SQL*Plus:       sqlplus user/pass@service
           2. Oracle SQLcl:          sql user/pass@service
           3. connping/ociping:      connping user/pass@service
-          4. adbping:               (requires manual install from Oracle Support)
+          4. adbping:               adbping -u user -p pass -s service -w wallet -i instantclient -j javahome
           
           AZURE & OCI:
           ------------

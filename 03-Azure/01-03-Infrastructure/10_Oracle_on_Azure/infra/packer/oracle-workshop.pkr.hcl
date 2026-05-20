@@ -5,6 +5,7 @@
 # - Oracle Instant Client 23.5 + SQL*Plus
 # - Oracle SQLcl (SQL Developer Command Line)
 # - rwloadsim/connping
+# - adbping (Oracle ADB latency testing)
 # - Java 17 OpenJDK
 # - Azure CLI
 # - OCI CLI
@@ -149,6 +150,12 @@ build {
       "sudo apt-get install -y -qq ansible",
       "ansible --version",
     ]
+  }
+
+  # Upload adbping archive to the build VM
+  provisioner "file" {
+    source      = "${path.root}/files/adbping.zip"
+    destination = "/tmp/adbping.zip"
   }
 
   # Run the playbook locally on the VM (no SSH between tasks)
