@@ -14,6 +14,63 @@ You will learn how to create and configure an Autonomous Database Shared out of 
 
 ![ODAA microhack architecture](media/Microhack_overview.jpg)
 
+```mermaid
+flowchart TB
+    subgraph REGION["Azure Region"]
+        subgraph SUB_VM["Subscription"]
+            subgraph RG_VM["Resource Group"]
+                PDZ_VM["Private DNS Zone"]
+                subgraph VNET_VM["VNet"]
+                    subgraph SNET_VM["Subnet"]
+                        VM["Virtual Machine"]
+                    end
+                end
+            end
+        end
+
+        subgraph SUB_ODAA["Subscription"]
+            subgraph RG_ODAA["Resource Group"]
+                PDZ_ODAA["Private DNS Zone"]
+                subgraph VNET_ODAA["VNet"]
+                    subgraph SNET_ODAA["Subnet"]
+                        NIC["NIC"]
+                        DB["DB"]
+                    end
+                end
+            end
+        end
+
+        subgraph SUB_ORA["Subscription"]
+            ORA["Oracle Subscription"]
+        end
+    end
+
+    USER(["User"]) --> SUB_VM
+    USER --> SUB_ODAA
+    PDZ_VM --- VNET_VM
+    VNET_VM ---|VNet Peering| VNET_ODAA
+    PDZ_ODAA --- SNET_ODAA
+    NIC --- DB
+    ORA --- DB
+
+    style REGION fill:#1a3a5c,color:#fff
+    style SUB_VM fill:#0d4d6e,color:#fff
+    style SUB_ODAA fill:#0d4d6e,color:#fff
+    style SUB_ORA fill:#0d4d6e,color:#fff
+    style RG_VM fill:#1a6b5c,color:#fff
+    style RG_ODAA fill:#1a6b5c,color:#fff
+    style VNET_VM fill:#2a7ab5,color:#fff
+    style VNET_ODAA fill:#2a7ab5,color:#fff
+    style SNET_VM fill:#4a9ad5,color:#000
+    style SNET_ODAA fill:#4a9ad5,color:#000
+    style VM fill:#0078D4,color:#fff
+    style NIC fill:#C74634,color:#fff
+    style DB fill:#C74634,color:#fff
+    style ORA fill:#C74634,color:#fff
+    style PDZ_VM fill:#C74634,color:#fff
+    style PDZ_ODAA fill:#C74634,color:#fff
+```
+
 In an extended hackathon (not part of the following hackathon), we can integrate ODAA and their services into existing Azure native services like AKV, Azure EntraID, etc. and use GoldenGate for migrations to ODAA and integration into Azure Fabric. 
 
 
