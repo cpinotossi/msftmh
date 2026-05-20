@@ -27,10 +27,10 @@ sub-mhcore (09808f31...)        sub-mh0 (ff0bb075...)           sub-mhodaa (4aec
 │                     │   │  │   (10.0.0.0/24)       │   │  │   (192.168.0.0/16)        │
 │ rg-odaamh-github-   │   │  ├─ VM + Bastion         │   │  ├─ vnet-odaa-basedb         │
 │ runner              │   │  └─ NAT Gateway          │   │  │   (172.16.0.0/16)         │
-│  ├─ Container App   │   │                          │   │  └─ Resource Anchor          │
-│  │  Job (Runner)    │   │  Peerings:               │   │                              │
-│  └─ Storage Account │   │  vm ↔ vnet-odaa-shared   │   │ rg-odaa-user00               │
-│     (tfstate)       │   │  vm ↔ vnet-odaa-basedb   │   │  └─ (User erstellt DBs hier) │
+│  ├─ Container App   │   │                          │   │  ├─ Resource Anchor          │
+│  │  Job (Runner)    │   │  Peerings:               │   │  └─ (User erstellt DBs hier) │
+│  └─ Storage Account │   │  vm ↔ vnet-odaa-shared   │   │                              │
+│     (tfstate)       │   │  vm ↔ vnet-odaa-basedb   │   │                              │
 └─────────────────────┘   └──────────────────────────┘   └──────────────────────────────┘
 ```
 

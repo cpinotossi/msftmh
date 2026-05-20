@@ -22,13 +22,6 @@ output "user_vm_info" {
   }
 }
 
-output "user_odaa_rgs" {
-  description = "ODAA resource group names for all users"
-  value = {
-    for key, rg in azurerm_resource_group.user_odaa : "user${key}" => rg.name
-  }
-}
-
 output "ssh_commands" {
   description = "Bastion SSH commands to connect to all user VMs"
   value = {

@@ -1,10 +1,9 @@
 # ===============================================================================
-# Users Infrastructure - Per-User VMs, ODAA RGs, Peerings
+# Users Infrastructure - Per-User VMs, Peerings
 # ===============================================================================
 # This project manages per-user resources (scales with var.user_count):
 # - SSH key pair (shared across all VMs, admin emergency access)
 # - Nx User VMs with Bastion + unique /24 VNets (sub-mh0)
-# - Nx User ODAA RGs with RBAC (sub-mhodaa)
 # - Nx VNet peerings (user VM VNet <-> shared ODAA VNet)
 # - Nx VNet peerings (user VM VNet <-> shared BaseDB VNet)
 # - Nx DNS zone links (per-user DNS zone -> user VM VNet)
@@ -70,40 +69,6 @@ module "user_vm" {
   tags = var.tags
 }
 
-# ===============================================================================
-# USER ODAA RGs — One per user (sub-mhodaa)
-# ===============================================================================
-
-resource "azurerm_resource_group" "user_odaa" {
-  for_each = local.user_keys
-  provider = azurerm.mhodaa
-  name     = "rg-odaa-user${each.key}"
-  location = var.location
-  tags     = merge(var.tags, { UserIndex = tonumber(each.key) })
-}
-
-resource "azurerm_role_assignment" "user_odaa_db_creator" {
-  for_each           = { for k, v in local.user_keys : k => k if lookup(var.user_object_ids, k, null) != null }
-  provider           = azurerm.mhodaa
-  scope              = azurerm_resource_group.user_odaa[each.key].id
-  role_definition_id = local.shared.odaa_role_definition_resource_id
-  principal_id       = var.user_object_ids[each.key]
-  description        = "Allows Entra ID user to create Oracle ADB/BaseDB in ${azurerm_resource_group.user_odaa[each.key].name}"
-}
-
-# ===============================================================================
-# State migration: user-odaa module inlined
-# ===============================================================================
-
-moved {
-  from = module.user_odaa["00"].azurerm_resource_group.odaa
-  to   = azurerm_resource_group.user_odaa["00"]
-}
-
-moved {
-  from = module.user_odaa["00"].azurerm_role_assignment.odaa_db_creator[0]
-  to   = azurerm_role_assignment.user_odaa_db_creator["00"]
-}
 
 # ===============================================================================
 # VNET PEERING — User VM VNet <-> Shared ODAA VNet (ADB)
