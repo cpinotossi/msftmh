@@ -31,8 +31,8 @@ The following diagram shows how VNet peering connects the VM to the Oracle Auton
 flowchart TB
     subgraph VM_SUB["Azure Subscription VM: sub-mhuser"]
         subgraph VM_RG["Resource Group: rg-vm-userXX"]
-            subgraph VM_VNET["VNet: vnet-vm-userXX — 10.0.0.0/16"]
-                subgraph VM_SUBNET["Subnet: snet-vm-userXX — 10.0.0.0/24"]
+            subgraph VM_VNET["VNet: vnet-vm-userXX 10.0.0.0/16"]
+                subgraph VM_SUBNET["Subnet: snet-vm-userXX 10.0.0.0/24"]
                     VM["Virtual Machine: vm-userXX"]
                 end
                 DNS["Private DNS Zones"]
@@ -42,8 +42,8 @@ flowchart TB
 
     subgraph ODAA_SUB["Azure Subscription ODAA: sub-mhodaa"]
         subgraph ODAA_RG["Resource Group: rg-odaa-shared"]
-            subgraph ODAA_VNET["VNet: vnet-odaa-shared — 192.168.0.0/16"]
-                subgraph ODAA_SUBNET["Delegated Subnet: snet-odaa-delegated — 192.168.0.0/24"]
+            subgraph ODAA_VNET["VNet: vnet-odaa-shared 192.168.0.0/16"]
+                subgraph ODAA_SUBNET["Delegated Subnet: snet-odaa-delegated 192.168.0.0/24"]
                     ADB["Oracle ADB: adbuserXX"]
                 end
             end
@@ -51,7 +51,7 @@ flowchart TB
         end
     end
 
-    VM_VNET <-->|VNet Peering| ODAA_VNET
+    VM_VNET ---|VNet Peering| ODAA_VNET
     VM -.->|SQL Queries| ADB
     DNS -.->|Resolves hostname| ADB
 
@@ -91,32 +91,31 @@ The following diagram shows how Azure organizes resources, mapped to our Terrafo
 
 ```mermaid
 flowchart TB
-    subgraph TENANT[Azure Tenant - Entra ID Directory]
-        direction TB
-        USERS[Users and Groups<br/>mh-odaa-user-grp]
+    subgraph TENANT["Azure Tenant - Entra ID Directory"]
+        USERS["Users and Groups mh-odaa-user-grp"]
         
-        subgraph SUB_VM[Subscription: sub-mhuser]
-            subgraph RG_VM[Resource Group: rg-vm-userXX]
-                VNET_VM[VNet: vnet-vm-userXX<br/>10.0.0.0/16]
-                SNET_VM[Subnet: snet-vm-userXX]
-                VM_MACHINE[VM: vm-userXX]
-                LOG[Log Analytics]
-                DNS_ZONES[Private DNS Zones]
+        subgraph SUB_VM["Subscription: sub-mhuser"]
+            subgraph RG_VM["Resource Group: rg-vm-userXX"]
+                VNET_VM["VNet: vnet-vm-userXX 10.0.0.0/16"]
+                SNET_VM["Subnet: snet-vm-userXX"]
+                VM_MACHINE["VM: vm-userXX"]
+                LOG["Log Analytics"]
+                DNS_ZONES["Private DNS Zones"]
             end
         end
         
-        subgraph SUB_ODAA[Subscription: sub-mhodaa]
-            subgraph RG_ODAA[Resource Group: rg-odaa-shared]
-                VNET_ODAA[VNet: vnet-odaa-shared<br/>192.168.0.0/16]
-                SNET_ODAA[Delegated Subnet: snet-odaa-delegated]
-                ADB[Oracle ADB: adbuserXX]
+        subgraph SUB_ODAA["Subscription: sub-mhodaa"]
+            subgraph RG_ODAA["Resource Group: rg-odaa-shared"]
+                VNET_ODAA["VNet: vnet-odaa-shared 192.168.0.0/16"]
+                SNET_ODAA["Delegated Subnet: snet-odaa-delegated"]
+                ADB["Oracle ADB: adbuserXX"]
             end
         end
     end
 
     USERS --> SUB_VM
     USERS --> SUB_ODAA
-    VNET_VM <-->|VNet Peering| VNET_ODAA
+    VNET_VM ---|VNet Peering| VNET_ODAA
 
     style TENANT fill:#0078D4,color:#fff
     style USERS fill:#FFB900,color:#000
