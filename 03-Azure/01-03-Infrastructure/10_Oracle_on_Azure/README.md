@@ -116,7 +116,7 @@ flowchart TB
 
     USERS --> SUB_VM
     USERS --> SUB_ODAA
-    VNET_VM <-.->|VNet Peering| VNET_ODAA
+    VNET_VM <-->|VNet Peering| VNET_ODAA
 
     style TENANT fill:#0078D4,color:#fff
     style USERS fill:#FFB900,color:#000
@@ -369,9 +369,9 @@ flowchart TB
     subgraph VM_SUB["Azure Subscription: VM"]
         subgraph VM_RG["Resource Group: rg-vm-userXX"]
             subgraph VNET["VNet: vnet-vm-userXX<br/>10.0.0.0/16"]
-                VM[" VM: vm-userXX"]
+                VM["VM: vm-userXX"]
             end
-            LINK[" VNet Link"]
+            LINK["VNet Link"]
             subgraph DNS_ZONE["Private DNS Zone<br/>adb.eu-paris-1.oraclecloud.com"]
                 A_RECORD["A Record<br/>Name: abc123<br/>IP: 192.168.0.10"]
             end
@@ -379,7 +379,7 @@ flowchart TB
     end
 
     subgraph ODAA_SUB["Azure Subscription: ODAA"]
-        ADB[" Oracle ADB<br/><br/>Database private URL:<br/>abc123.adb.eu-paris-1...<br/>Database private IP:<br/>192.168.0.10"]
+        ADB["Oracle ADB<br/><br/>Database private URL:<br/>abc123.adb.eu-paris-1...<br/>Database private IP:<br/>192.168.0.10"]
     end
 
     ADB -.->|"Copy URL & IP"| A_RECORD

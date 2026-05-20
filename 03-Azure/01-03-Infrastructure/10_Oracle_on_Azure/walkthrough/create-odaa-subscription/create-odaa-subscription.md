@@ -16,12 +16,12 @@ Without an ODAA Subscription, you cannot create any ODAA Database services.
 
 ```mermaid
 flowchart TB
-    subgraph Azure[" Azure"]
+    subgraph Azure["Azure"]
         subgraph AzureSub["Azure Subscription"]
             subgraph ODAAS["ODAA Subscription<br/>(Container & Commercial Terms)"]
-                DB1[" Oracle Database Service 1<br/>(e.g., Autonomous DB)"]
-                DB2[" Oracle Database Service 2<br/>(e.g., Exadata DB)"]
-                DB3[" Oracle Database Service N"]
+                DB1["Oracle Database Service 1<br/>(e.g., Autonomous DB)"]
+                DB2["Oracle Database Service 2<br/>(e.g., Exadata DB)"]
+                DB3["Oracle Database Service N"]
             end
         end
     end
@@ -103,7 +103,7 @@ flowchart LR
     B --> C["3⃣ Link to<br/>OCI Tenancy"]
     C --> D["4⃣ Configure<br/>Account Details"]
     D --> E["5⃣ Activate<br/>ODAA Subscription"]
-    E --> F[" Ready to<br/>Create Databases"]
+    E --> F["Ready to<br/>Create Databases"]
 
     style A fill:#0078D4,color:#fff
     style B fill:#50E6FF,color:#000
@@ -143,18 +143,18 @@ You perform most onboarding tasks only once, during your ODAA Subscription deplo
 
 ```mermaid
 flowchart TB
-    subgraph Azure[" Microsoft Azure"]
+    subgraph Azure["Microsoft Azure"]
         subgraph AzureSub["Azure Subscription"]
-            Portal[" Azure Portal<br/>(Primary Management)"]
+            Portal["Azure Portal<br/>(Primary Management)"]
             ODAAS["📦 ODAA Subscription"]
-            Hardware[" Oracle Hardware<br/>(In Azure Data Center)"]
+            Hardware["Oracle Hardware<br/>(In Azure Data Center)"]
         end
     end
 
-    subgraph OCI[" Oracle Cloud Infrastructure"]
+    subgraph OCI["Oracle Cloud Infrastructure"]
         subgraph OCITenancy["OCI Tenancy"]
-            Console[" OCI Console<br/>(Oracle-Specific Config)"]
-            OracleServices[" Oracle Services<br/>(Backup, Patching, etc.)"]
+            Console["OCI Console<br/>(Oracle-Specific Config)"]
+            OracleServices["Oracle Services<br/>(Backup, Patching, etc.)"]
         end
     end
 
@@ -162,7 +162,7 @@ flowchart TB
     ODAAS <--> |"Service Integration"| OracleServices
     Hardware <--> |"Management"| OracleServices
 
-    User([" Administrator"]) --> Portal
+    User(["Administrator"]) --> Portal
     User -.-> |"Some configs"| Console
 
     style Azure fill:#0078D4,color:#fff
