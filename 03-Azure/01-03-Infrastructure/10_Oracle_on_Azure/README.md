@@ -1,8 +1,8 @@
 ﻿![ODAA microhack logo](media/logo_ODAA_microhack_1900x300.jpg)
 
-# 🚀 Microhack - Oracle Database @ Azure (ODAA)
+#  Microhack - Oracle Database @ Azure (ODAA)
 
-## 📖 Introduction
+##  Introduction
 
 This intro-level microhack (hackathon) helps you gain hands-on experience with Oracle Database@Azure (ODAA).
 
@@ -172,7 +172,7 @@ OCI:    Tenancy --> Compartment (nested) --> Resource
 - Apply required networking and DNS configurations to enable hybrid connectivity between an application deployed Virtual Machine and Oracle Database@Azure resources.
 - Use the Virtual Machine to execute connectivity test and performance test against the deployed Oracle databases.
 
-## 📋 Prerequisites
+##  Prerequisites
 
 You have two options to run this microhack:
 
@@ -182,7 +182,7 @@ You have two options to run this microhack:
 ### Local Tools (if not using Cloud Shell)
 
 - PowerShell Terminal
-- 🔧 Install Azure CLI
+-  Install Azure CLI
 - Install git and clone this repo by following the instructions in [Clone Partial Repository](docs/clone-partial-repo.md)
 
 > [!TIP]
@@ -208,7 +208,7 @@ You have two options to run this microhack:
 > All commands in this microhack will work in Cloud Shell without modification.
 
 
-## 🎯 Challenges
+##  Challenges
  
 ### Challenge 0: Set Up Your User Account
 
@@ -369,9 +369,9 @@ flowchart TB
     subgraph VM_SUB["Azure Subscription: VM"]
         subgraph VM_RG["Resource Group: rg-vm-userXX"]
             subgraph VNET["VNet: vnet-vm-userXX<br/>10.0.0.0/16"]
-                VM["💻 VM: vm-userXX"]
+                VM[" VM: vm-userXX"]
             end
-            LINK["🔗 VNet Link"]
+            LINK[" VNet Link"]
             subgraph DNS_ZONE["Private DNS Zone<br/>adb.eu-paris-1.oraclecloud.com"]
                 A_RECORD["A Record<br/>Name: abc123<br/>IP: 192.168.0.10"]
             end
@@ -379,7 +379,7 @@ flowchart TB
     end
 
     subgraph ODAA_SUB["Azure Subscription: ODAA"]
-        ADB["🗄️ Oracle ADB<br/>━━━━━━━━━━━━━━━━━<br/>Database private URL:<br/>abc123.adb.eu-paris-1...<br/>Database private IP:<br/>192.168.0.10"]
+        ADB[" Oracle ADB<br/><br/>Database private URL:<br/>abc123.adb.eu-paris-1...<br/>Database private IP:<br/>192.168.0.10"]
     end
 
     ADB -.->|"Copy URL & IP"| A_RECORD
@@ -449,11 +449,11 @@ and collect the round-trip results. Optionally supplement the findings with the 
 * Challenge 4: [Measure Network Performance to Your Oracle Database@Azure Autonomous Database](./walkthrough/perf-test-odaa-adb/perf-test-odaa-adb.md)
 
 
-<!-- - 🔌 Challenge 4: **[Do performance test from inside the AKS cluster against the Oracle ADB instance](./walkthrough/c3-perf-test-odaa.md)**
-- 🦫 Challenge 5: **[Review data replication via Beaver](./walkthrough/c5-beaver-odaa.md)**
-- 🏗️ Challenge 6: **[Setup High Availability for Oracle ADB](./walkthrough/c6-ha-oracle-adb.md)**
-- 📊 Challenge 7: **[(Optional) Use Estate Explorer to visualize the Oracle ADB instance](./walkthrough/c7-estate-explorer-odaa.md)**
-- 🧵 Challenge 8: **[(Optional) Use Azure Data Fabric with Oracle ADB](./walkthrough/c8-azure-data-fabric-odaa.md)** -->
+<!-- -  Challenge 4: **[Do performance test from inside the AKS cluster against the Oracle ADB instance](./walkthrough/c3-perf-test-odaa.md)**
+-  Challenge 5: **[Review data replication via Beaver](./walkthrough/c5-beaver-odaa.md)**
+-  Challenge 6: **[Setup High Availability for Oracle ADB](./walkthrough/c6-ha-oracle-adb.md)**
+-  Challenge 7: **[(Optional) Use Estate Explorer to visualize the Oracle ADB instance](./walkthrough/c7-estate-explorer-odaa.md)**
+-  Challenge 8: **[(Optional) Use Azure Data Fabric with Oracle ADB](./walkthrough/c8-azure-data-fabric-odaa.md)** -->
  
 ## Contributors
 

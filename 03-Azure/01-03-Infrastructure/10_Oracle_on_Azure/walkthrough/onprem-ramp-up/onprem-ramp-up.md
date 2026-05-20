@@ -17,7 +17,7 @@ We will install the following components into the AKS cluster under the Namespac
 
 Helm is a package manager for Kubernetes that allows you to define, install, and manage Kubernetes applications. It uses a packaging format called charts, which are collections of pre-configured Kubernetes resources.
 
-## 🔐 Login to Azure and set the right subscription
+##  Login to Azure and set the right subscription
 
 ~~~bash
 az login # choose your assigned user account for ex. user01@cptazure.org or the menu "Work or school account
@@ -42,7 +42,7 @@ $AKSClusterName="aks-user00" # replace with your AKS cluster name
 az aks get-credentials -g $rgAKS -n $AKSClusterName --overwrite-existing
 ~~~
 
-## 🛠️ Install OnPrem on AKS with helm
+##  Install OnPrem on AKS with helm
 
 ~~~powershell
 # Install golden gate  
@@ -66,7 +66,7 @@ Hang tight while we grab the latest from your chart repositories...
 Update Complete. ⎈Happy Helming!⎈
 ~~~
 
-## 🔧 Replace Goldengate configuration File User Name in gghack.yaml
+##  Replace Goldengate configuration File User Name in gghack.yaml
 
 ~~~powershell
 # retrieve the external IP of the nginx ingress controller
@@ -88,7 +88,7 @@ microhack:
 ogg:
 ~~~
 
-## 🔧 Replace Goldengate configuration File Ingress Public IP in gghack.yaml
+##  Replace Goldengate configuration File Ingress Public IP in gghack.yaml
 
 We are already running an nginx ingress controller in the AKS cluster to provide access from outside the cluster to the GoldenGate microhack application.
 
@@ -134,11 +134,11 @@ services:
     sslPort: 8443
 ~~~
 
-## 🔗 Replace Goldengate configuration File gghack.yaml ODAA TNS connection String
+##  Replace Goldengate configuration File gghack.yaml ODAA TNS connection String
 
 Reference the document [How to retrieve the Oracle Database Autonomous Database connection string from ODAA](../../docs/odaa-get-token.md) to get the TNS connection string for your ODAA ADB instance.
 
-⚠️ **Important**: If you follow the instructions in `docs\odaa-get-token.md`, remember to switch back to your AKS subscription after retrieving the TNS connection string:
+ **Important**: If you follow the instructions in `docs\odaa-get-token.md`, remember to switch back to your AKS subscription after retrieving the TNS connection string:
 
 After you have retrieved the TNS connection string and assigned it to the `$trgConn` variable (as shown in docs\odaa-get-token.md), replace the placeholder in the gghack.yaml file:
 
@@ -166,7 +166,7 @@ databases:
   trgConn: "(description= (retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1521)(host=zuyhervb.adb.eu-paris-1.oraclecloud.com))(connect_data=(service_name=gc2401553d1c7ab_uer00_high.adb.oraclecloud.com))(security=(ssl_server_dn_match=no)))"
 ~~~
 
-## 🚀 Install GoldenGate Pods
+##  Install GoldenGate Pods
 
 Like mentioned at the beginning of this challenge, we will install several components on the AKS cluster under the Namespace "microhacks" via helm. Some of this components will be acccessing via a Web UI, some of them will need to connect to each other. Therefore we need to create some Kubernetes secrets to store the required credentials.
 
@@ -252,9 +252,9 @@ kubectl get pods -n microhacks --watch
 
 ⏰ Wait until the ogghack-goldengate-microhack-sample-db-prepare-job is completed and exit the watch with Ctrl+C. It takes about 8 minutes till all pods are running / Completed. 
 
-> ℹ️ **NOTE**: Error and CrashLoopBackOff of the ogghack-goldengate-microhack-sample-db-prepare-job pod is expected.
+> ℹ **NOTE**: Error and CrashLoopBackOff of the ogghack-goldengate-microhack-sample-db-prepare-job pod is expected.
 
-📊 The output should look similar to this after the job is completed:
+ The output should look similar to this after the job is completed:
 
 ~~~text
 NAME                                                              READY   STATUS      RESTARTS   AGE
@@ -265,13 +265,13 @@ ogghack-goldengate-microhack-sample-jupyter-69d77b895b-4b7g8      1/1     Runnin
 ogghack-goldengate-microhack-sample-ogg-787f954698-kzjpl          1/1     Running     0          62m
 ~~~
 
-✅ After the job is completed, the local database, which is running inside the AKS cluster, has been migrated to the ODAA ADB instance via Oracle Data Pump.
+ After the job is completed, the local database, which is running inside the AKS cluster, has been migrated to the ODAA ADB instance via Oracle Data Pump.
 
 Use Key CTRL+C to exit the watch command.
 
 > IMPORTANT: While you are waiting feel free to already work on the next challenge [Challenge 5: Measure Network Performance to Your Oracle Database@Azure Autonomous Database](../perf-test-odaa-adb/perf-test-odaa-adb.md).
 
-### 🔌 Connect to the ADB Oracle Database
+###  Connect to the ADB Oracle Database
 
 ~~~powershell
 # extract the pod name of the instantcleint as it contains a random suffix

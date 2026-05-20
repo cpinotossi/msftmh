@@ -1,4 +1,4 @@
-# 🚀 Challenge 2: Create Azure ODAA [Oracle Database@Azure] Database Resources
+#  Challenge 2: Create Azure ODAA [Oracle Database@Azure] Database Resources
 
 [Back to workspace README](../../README.md)
 
@@ -10,7 +10,7 @@
 4. Furthermore, you will deploy in this chapter an ADB database via the Azure Portal.
 5. Finally, check if the existing VNet peering between the Virtual Machine and database subscriptions is available and correctly configured.
 
-## 🛰️ Delegated Subnet Design (Prerequisites)
+## 🛰 Delegated Subnet Design (Prerequisites)
 
 - ODAA Autonomous Database can be deployed within Azure Virtual Networks, in delegated subnets that are delegated to Oracle Database@Azure.
 - Client subnet CIDR falls in general between /27 and /22 (inclusive).
@@ -20,7 +20,7 @@ A more detailed description can be found here: [Oracle Documentation: Oracle's d
 
 **NOTE**: For this Microhack, we have already created the corresponding VNets and subnets, so no additional action is required in this step.
 
-## 🧭 What is an Azure Delegated Subnet?
+##  What is an Azure Delegated Subnet?
 
 Azure delegated subnets allow you to delegate exclusive control of a subnet within your VNet to a specific Azure service. When you delegate a subnet, the service can deploy and manage its own network resources (NICs, endpoints, routing) within that subnet without requiring you to provision each resource manually. Traffic still flows privately over your VNet, and you remain in control of higher-level constructs like NSGs and route tables.
 
@@ -42,7 +42,7 @@ You find under the sub-menu Settings the menu Subnets. In the menu Subnets, you 
    ![Overview delegated subnet to Oracle.Database/networkAttachments](media/adb7.png)
 
 
-## 🛠️ Create an ODAA Autonomous Database Instance
+##  Create an ODAA Autonomous Database Instance
 
 ### In the Azure portal, search for Oracle Services and select **Oracle Database@Azure**. 
 ![Azure portal Oracle Database@Azure](media/adb8.png)

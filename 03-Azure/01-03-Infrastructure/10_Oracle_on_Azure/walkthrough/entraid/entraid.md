@@ -1,4 +1,4 @@
-# 🔐 Enable Microsoft Entra ID Authentication on Autonomous AI Database
+#  Enable Microsoft Entra ID Authentication on Autonomous AI Database
 
 [Back to workspace README](../../README.md)
 
@@ -100,7 +100,7 @@ identity_provider_type
 AZURE_AD
 ~~~
 
-### 🗺️ Exclusively Mapping an Oracle Database Schema to a Microsoft Azure User
+### 🗺 Exclusively Mapping an Oracle Database Schema to a Microsoft Azure User
 
 You can exclusively map an Oracle Database schema to a Microsoft Azure user.
 
@@ -202,7 +202,7 @@ END;
 
 ~~~
 
-### ⚙️ 8.4.4 Operational Flow for SQL*Plus Client Connection in PowerShell to Oracle Database
+###  8.4.4 Operational Flow for SQL*Plus Client Connection in PowerShell to Oracle Database
 
 (source: [Oracle documentation](https://docs.oracle.com/en/database/oracle/oracle-database/19/dbseg/authenticating-and-authorizing-microsoft-entra-id-ms-ei-users-oracle-databases-oracle-exadata.html#GUID-455CDC87-C5A1-4A58-801A-29D216CB66B5))
 
@@ -241,13 +241,13 @@ cat /tmp/wallet/token.txt
 exit
 ~~~
 
-#### 🛠️ 8.4.7 Configuring SQL*Plus for Azure AD Access Tokens
+####  8.4.7 Configuring SQL*Plus for Azure AD Access Tokens
 
 (source: [Oracle documentation](https://docs.oracle.com/en/database/oracle/oracle-database/19/dbseg/authenticating-and-authorizing-microsoft-entra-id-ms-ei-users-oracle-databases-oracle-exadata.html#GUID-89CB6E1E-E383-476A-8B46-4343CEF8512E))
 
-##### ✅ Ensure you have an Azure AD user account
+#####  Ensure you have an Azure AD user account
 
-##### 🔍 Check with an Azure AD administrator or Oracle Database administrator
+#####  Check with an Azure AD administrator or Oracle Database administrator
 
 For one of the following:
 
@@ -258,7 +258,7 @@ For one of the following:
 
 ##### 📥 Follow the existing process to download the wallet from the Oracle Database instance and then configure SQL*Plus
 
-##### ⚙️ Set the sqlnet.ora parameters on the client
+#####  Set the sqlnet.ora parameters on the client
 
 Check for the parameter SSL_SERVER_DN_MATCH = ON to ensure that DN matching is enabled.
 

@@ -1,18 +1,18 @@
-# 🧵 Challenge 8: (Optional) Integration of Azure Data Fabric with Oracle ADB
+#  Challenge 8: (Optional) Integration of Azure Data Fabric with Oracle ADB
 
 [Back to workspace README](../../README.md)
 
-## 🎯 Overview
+##  Overview
 
-🚀 This challenge focuses on integrating Oracle Autonomous Database (ADB) with Azure Data Fabric to create comprehensive data solutions that leverage both Oracle's database capabilities and Azure's data platform services.
+ This challenge focuses on integrating Oracle Autonomous Database (ADB) with Azure Data Fabric to create comprehensive data solutions that leverage both Oracle's database capabilities and Azure's data platform services.
 
-## 📋 Key Integration Areas
+##  Key Integration Areas
 
-1. **🔗 Data Connectivity**
+1. ** Data Connectivity**
    - Configure secure connections between Oracle ADB and Azure Data Fabric
    - Set up data source registrations
 
-2. **📊 Data Pipeline Creation**
+2. ** Data Pipeline Creation**
    - Build data pipelines to move data between Oracle ADB and Azure services
    - Implement real-time and batch data processing
 
@@ -20,11 +20,11 @@
    - Create reports and dashboards using Azure Data Fabric tools
    - Leverage Power BI integration for visualization
 
-4. **🔍 Data Governance**
+4. ** Data Governance**
    - Implement data lineage tracking
    - Set up data quality monitoring
 
-## 🚀 Deploy GoldenGate for Azure Fabric on AKS
+##  Deploy GoldenGate for Azure Fabric on AKS
 
 Log in to the AKS cluster where you want to deploy GoldenGate for Azure Fabric if not already done:
 
@@ -59,7 +59,7 @@ The value of vhostName should look like this:
     vhostName: ggfabric.xxx-xxx-xxx-xxx.nip.io
 ~~~
 
-## 🚀 Install GoldenGate Pods
+##  Install GoldenGate Pods
 
 Install all components via Helm:
 
@@ -96,9 +96,9 @@ You can now access the GoldenGate Microservices UI at: `https://ggfabric.<EXTERN
 
 ## 📚 Useful Resources
 
-- 🌐 [Azure Data Fabric Documentation](https://docs.microsoft.com/en-us/azure/data-factory/)
+-  [Azure Data Fabric Documentation](https://docs.microsoft.com/en-us/azure/data-factory/)
 - 🔶 [Oracle ADB Integration Guides](https://docs.oracle.com/en/cloud/paas/autonomous-database/)
-- 🔗 [Hybrid Data Integration Patterns](https://docs.microsoft.com/en-us/azure/architecture/)
+-  [Hybrid Data Integration Patterns](https://docs.microsoft.com/en-us/azure/architecture/)
 
 ## 💡 Tips and Tricks
 
@@ -111,7 +111,7 @@ az aks get-credentials -g $rgAKS -n $AKSClusterName --overwrite-existing
 helm uninstall oggfabric -n microhacks
 ~~~
 
-### 🔐 Use a private Oracle Container Registry image
+###  Use a private Oracle Container Registry image
 
 ~~~powershell
 # delete secret if already exist

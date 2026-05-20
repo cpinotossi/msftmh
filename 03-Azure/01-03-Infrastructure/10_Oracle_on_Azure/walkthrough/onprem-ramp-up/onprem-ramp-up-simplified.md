@@ -2,11 +2,11 @@
 
 [Back to workspace README](../../README.md) | [Original detailed walkthrough](./onprem-ramp-up.md)
 
-> 📖 We are going to use an automated script to deploy everything with minimal manual steps which will mimic an OnPrem environment.
+>  We are going to use an automated script to deploy everything with minimal manual steps which will mimic an OnPrem environment.
 
 ---
 
-## 🎯 What You'll Deploy
+##  What You'll Deploy
 
 This challenge sets up Oracle GoldenGate to replicate data from an on-premises Oracle database (running in AKS) to your ODAA Autonomous Database:
 
@@ -19,7 +19,7 @@ This challenge sets up Oracle GoldenGate to replicate data from an on-premises O
 
 ---
 
-## 📋 Prerequisites
+##  Prerequisites
 
 Before starting, make sure you have:
 
@@ -30,7 +30,7 @@ Before starting, make sure you have:
 
 ---
 
-## 🚀 Step 1: Get Your ODAA Connection String
+##  Step 1: Get Your ODAA Connection String
 
 First, retrieve your ODAA ADB connection string from the Azure Portal:
 
@@ -44,8 +44,8 @@ First, retrieve your ODAA ADB connection string from the Azure Portal:
 > 
 > You will see a list with: **TLS** and **mTLS (mutual TLS)**. Make sure you copy the connection string from the **TLS** tab.
 > 
-> - ✅ **TLS:** Server-side certificate only (simpler, what we use here)
-> - ❌ **mTLS:** Requires client wallet/certificates (more complex setup)
+> -  **TLS:** Server-side certificate only (simpler, what we use here)
+> -  **mTLS:** Requires client wallet/certificates (more complex setup)
 
 It should look like this:
 ```
@@ -56,7 +56,7 @@ It should look like this:
 
 ---
 
-## 🚀 Step 2: Run the Deployment Script
+##  Step 2: Run the Deployment Script
 
 Open PowerShell and navigate to this folder, then run:
 
@@ -96,16 +96,16 @@ az account set --subscription "sub-team0"
 
 The script will:
 
-1. ✅ Connect to your AKS cluster
-2. ✅ Configure Helm repositories
-3. ✅ Auto-detect the Ingress external IP
-4. ✅ Validate the template file exists
-5. ✅ Create Kubernetes secrets
-6. ✅ Deploy using template + `--set` overrides (~5-10 minutes)
+1.  Connect to your AKS cluster
+2.  Configure Helm repositories
+3.  Auto-detect the Ingress external IP
+4.  Validate the template file exists
+5.  Create Kubernetes secrets
+6.  Deploy using template + `--set` overrides (~5-10 minutes)
 
 ---
 
-## 🔍 Step 3: Verify the Deployment
+##  Step 3: Verify the Deployment
 
 Once the script completes, check that all pods are running:
 
@@ -123,11 +123,11 @@ ogghack-goldengate-microhack-sample-jupyter-xxxxx                 1/1     Runnin
 ogghack-goldengate-microhack-sample-ogg-xxxxx                     1/1     Running     0          10m
 ```
 
-> ⚠️ **Note**: Some CrashLoopBackOff errors on the prepare-job are expected while it waits for the database.
+>  **Note**: Some CrashLoopBackOff errors on the prepare-job are expected while it waits for the database.
 
 ---
 
-## 🌐 Step 4: Access the Web Interfaces
+##  Step 4: Access the Web Interfaces
 
 The deployment creates several web interfaces (replace `<EXTERNAL-IP>` with your actual IP):
 
@@ -145,7 +145,7 @@ kubectl get service -n ingress-nginx -o jsonpath='{.items[*].status.loadBalancer
 
 ---
 
-## ✅ Step 5: Verify Data Replication
+##  Step 5: Verify Data Replication
 
 ### Connect to the Instant Client Pod
 
@@ -218,7 +218,7 @@ Type `exit` to leave the pod.
 
 ---
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 ### Redeploy if Something Goes Wrong
 
@@ -263,7 +263,7 @@ kubectl logs -n microhacks $prepPod
 
 ---
 
-## ⏭️ Next Challenge
+## ⏭ Next Challenge
 
 While waiting for the deployment, you can start on:
 

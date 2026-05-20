@@ -139,7 +139,7 @@ After the first successful run:
 
 ## Security Notes
 
-⚠️ **IMPORTANT**: 
+ **IMPORTANT**: 
 - `user_credentials.json` contains passwords - **do not commit to git!**
 - Rotate passwords after each event to revoke participant access
 - The `password_rotation_trigger` value is logged - use descriptive names for audit trail

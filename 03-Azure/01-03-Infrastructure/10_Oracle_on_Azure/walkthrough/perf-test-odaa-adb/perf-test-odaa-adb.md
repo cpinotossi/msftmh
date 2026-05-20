@@ -1,4 +1,4 @@
-# 🔌 Challenge: Perform Connectivity Tests on Oracle Database@azure [ODAA] Autonomous Database
+#  Challenge: Perform Connectivity Tests on Oracle Database@azure [ODAA] Autonomous Database
 
 [Back to workspace README](../../README.md)
 

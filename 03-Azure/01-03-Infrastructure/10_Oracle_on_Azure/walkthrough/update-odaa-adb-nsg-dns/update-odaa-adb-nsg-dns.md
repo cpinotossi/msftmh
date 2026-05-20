@@ -1,8 +1,8 @@
-# 🔐 Challenge: Update Oracle ADB NSG and DNS Configuration
+#  Challenge: Update Oracle ADB NSG and DNS Configuration
 
 [Back to workspace README](../../README.md)
 
-## 🌐 Network Security Group Configuration
+##  Network Security Group Configuration
 
 You need to update the Oracle ADB Network Security Group (NSG) with the CIDR range of the VNet where your Virtual Machine is deployed. This can be done via the Azure Portal.
 
