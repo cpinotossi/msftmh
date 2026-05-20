@@ -374,10 +374,10 @@ flowchart TB
     end
 
     subgraph ODAA_SUB["Azure Subscription: ODAA"]
-        ADB["Oracle ADB<br/><br/>Database private URL:<br/>abc123.adb.eu-paris-1...<br/>Database private IP:<br/>192.168.0.10"]
+        ADB["Oracle ADB<br/>Private URL: abc123.adb.eu-paris-1...<br/>Private IP: 192.168.0.10"]
     end
 
-    ADB -.->|"Copy URL & IP"| A_RECORD
+    ADB -.->|Copy URL and IP| A_RECORD
     VNET --- LINK
     LINK --- DNS_ZONE
 
