@@ -182,8 +182,7 @@ You have two options to run this microhack:
 ### Local Tools (if not using Cloud Shell)
 
 - PowerShell Terminal
--  Install Azure CLI
-- Install git and clone this repo by following the instructions in [Clone Partial Repository](docs/clone-partial-repo.md)
+- Install Azure CLI
 
 > [!TIP]
 > **Bash Users:** This microhack uses **PowerShell** syntax mostly. Bash users need to consider the key differences between powershell vs bash. Following some examples:
@@ -202,8 +201,6 @@ You have two options to run this microhack:
 > **To use Cloud Shell:**
 > 1. Open https://shell.azure.com or click the **Cloud Shell** icon in the Azure Portal header
 > 2. Select **PowerShell** as your shell environment
-> 3. Clone this repo: `git clone --depth 1 --filter=blob:none --sparse https://github.com/cpinotossi/msftmh.git`
-> 4. Navigate to the microhack folder: `cd msftmh/03-Azure/01-03-Infrastructure/10_Oracle_on_Azure`
 >
 > All commands in this microhack will work in Cloud Shell without modification.
 
@@ -323,8 +320,6 @@ In this microhack, you deploy the ADB via the **Azure portal**. For production e
 > 9. License type: **License included**
 > 10. Oracle database edition: **Enterprise Edition**
 
-
-Optional: After you started the ADB deployment please clone the Github repository. Instructions are listed in the challenge 2 at the end of the ADB deployment section - see **IMPORTANT: While you are waiting for the ADB creation**
 
 #### Success Criteria
 
