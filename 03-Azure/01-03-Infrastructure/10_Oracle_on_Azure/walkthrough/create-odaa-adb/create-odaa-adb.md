@@ -8,7 +8,7 @@
    1. Important: Choose the region <font color=red>FRANCE CENTRAL</font>
    2. Use in the Networking section <font color=red>Managed private virtual network IP only</font>
 4. Furthermore, you will deploy in this chapter an ADB database via the Azure Portal.
-5. Finally, check if the existing VNet peering between the AKS and database subscriptions is available and correctly configured.
+5. Finally, check if the existing VNet peering between the Virtual Machine and database subscriptions is available and correctly configured.
 
 ## 🛰️ Delegated Subnet Design (Prerequisites)
 

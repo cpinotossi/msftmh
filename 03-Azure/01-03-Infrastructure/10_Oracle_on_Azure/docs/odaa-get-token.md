@@ -17,13 +17,13 @@ To connect to the Oracle Database you will need the TNS connection string.
 # Prerequisites (if not already installed)
 az extension add --name oracle-database 
 
-$adbName="user02" # replace with your ADB name
+$adbName="adbuser02" # replace with your ADB name
 
 # Switch to the subscription where ODAA is deployed
 $subODAA="sub-mhodaa" 
 az account set --subscription $subODAA
 
-$rgODAA="odaa-user02" # replace with your resource group name
+$rgODAA="rg-odaa-shared" # shared resource group for all ODAA resources
 
 # Enable preview features for Oracle Database extension
 az config set extension.dynamic_install_allow_preview=true

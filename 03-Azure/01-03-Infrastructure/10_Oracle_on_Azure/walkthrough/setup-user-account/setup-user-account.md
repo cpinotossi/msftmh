@@ -95,5 +95,19 @@ It should look similar to this for Resource Group rg-odaa-shared.
 
 ![see your azure resource group](media/odaa_user_resources.png)
 
+### Verify your assigned roles
+
+To confirm your roles, navigate to each resource group and check **Access control (IAM)** → **View my access**:
+
+| Resource Group | Expected Roles |
+|---------------|---------------|
+| **rg-vm-userXX** | Reader, Virtual Machine User Login, Private DNS Zone Contributor |
+| **rg-odaa-shared** | Oracle Database Creator (custom role via group membership) |
+
+> **Tip:** You can also verify via Azure CLI:
+> ```powershell
+> az role assignment list --assignee <your-user@cptazure.org> --all --query "[].{scope:scope, role:roleDefinitionName}" -o table
+> ```
+
  
 [Back to workspace README](../../README.md)

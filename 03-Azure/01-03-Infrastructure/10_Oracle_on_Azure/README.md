@@ -10,7 +10,7 @@ This intro-level microhack (hackathon) helps you gain hands-on experience with O
 Oracle Database@Azure (ODAA) is the joint Oracle–Microsoft managed service that delivers different Database services - see [ODAA deployed Azure regions](https://apexadb.oracle.com/ords/r/dbexpert/multicloud-capabilities/multicloud-regions?session=412943632928469) running on Oracle infrastructure colocated in Azure regions while exposing native Azure management, networking, billing, integration with Azure Key Vault, Entra ID or Azure Sentinel. This microhack targets the first-tier partner solution play focused on Autonomous Database because Microsoft designates ODAA as a strategic, co-sell priority workload; the exercises give partner architects the end-to-end skills—subscription linking, delegated networking, hybrid connectivity, and performance validation—needed to confidently deliver that priority scenario for customers with Oracle-related workloads in Azure.
 
 ### What You Will Learn in the MicroHack
-You will learn how to create and configure an Autonomous Database Shared out of the offered Oracle Database@Azure services. How to deploy the Databases inside an Azure delegated subnet, update network security group (NSG) and DNS settings to enable connectivity from a simulated on-premises environment, and measure network performance to the Oracle Database instance. To make the microhack more realistic, we will deploy the Application layer (single VM machine) and the Data layer (ODAA) in two different subscriptions to simulate a hub-and-spoke architecture. The following picture shows the high-level architecture of the microhack.
+You will learn how to create and configure an Autonomous Database Shared out of the offered Oracle Database@Azure services. How to deploy the Databases inside an Azure delegated subnet, update network security group (NSG) and DNS settings to enable connectivity from a simulated on-premises environment, and measure network performance to the Oracle Database instance. To make the microhack more realistic, we will deploy the Application layer (single Virtual Machine) and the Data layer (ODAA) in two different subscriptions to simulate a hub-and-spoke architecture. The following picture shows the high-level architecture of the microhack.
 
 ![ODAA microhack architecture](media/Microhack_overview.jpg)
 
@@ -19,7 +19,7 @@ In an extended hackathon (not part of the following hackathon), we can integrate
 
 ## What is VNet Peering?
 
-In our deployed scenario, we created in advance a VNet peering between the VM machine VNet and the ADB VNet, which is required so the VM machine workloads can communicate privately and directly with the database.
+In our deployed scenario, we created in advance a VNet peering between the Virtual Machine VNet and the ADB VNet, which is required so the Virtual Machine workloads can communicate privately and directly with the database.
 
 ### Architecture Diagram
 
@@ -75,13 +75,13 @@ flowchart TB
 
 | Concept | Description |
 |---------|-------------|
-| **VNet isolation by default** | The virtual machine is running in one VNet and ADB sits in another; without peering, those address spaces are completely isolated and the VM machine cannot reach the database IPs at all. |
+| **VNet isolation by default** | The virtual machine is running in one VNet and ADB sits in another; without peering, those address spaces are completely isolated and the Virtual Machine cannot reach the database IPs at all. |
 | **Private, internal traffic** | Peering lets both VNets exchange traffic over private IPs only, as if they were one network. No public IPs, no internet exposure, no extra gateways are needed. |
 | **Low latency, high bandwidth path** | Application-database calls stay on the cloud backbone, which is crucial for chatty OLTP workloads and for predictable performance. |
 | **Simple routing model** | With peering, standard system routes know how to reach the other VNet's CIDR; you avoid managing separate VPNs, user-defined routes, or NAT just to reach the DB instances. |
-| **Granular security with NSGs** | Even with peering in place, NSGs on subnets/NICs still control which VM machine subnets and ports (for example, 1521/2484) can reach the ADB database, giving you a simple but secure pattern. |
+| **Granular security with NSGs** | Even with peering in place, NSGs on subnets/NICs still control which Virtual Machine subnets and ports (for example, 1521/2484) can reach the ADB database, giving you a simple but secure pattern. |
 
-**In summary:** The peering is what turns two isolated networks (VM machine and ADB) into a securely connected, private application-database path, which the scenario depends on for the workloads to function.
+**In summary:** The peering is what turns two isolated networks (Virtual Machine and ADB) into a securely connected, private application-database path, which the scenario depends on for the workloads to function.
 
 ## Mapping between Azure and OCI
 
@@ -169,8 +169,8 @@ OCI:    Tenancy --> Compartment (nested) --> Resource
 - Understand how to onboard securely to Azure and prepare an account for Oracle Database@Azure administration.
 - Learn the sequence for purchasing and linking an Oracle Database@Azure subscription with Oracle Cloud Infrastructure.
 - Deploy an Autonomous Database inside an Azure network architecture and the required preparations.
-- Apply required networking and DNS configurations to enable hybrid connectivity between an application deployed VM machine and Oracle Database@Azure resources.
-- Use the VM machine to execute connectivity test and performance test against the deployed Oracle databases.
+- Apply required networking and DNS configurations to enable hybrid connectivity between an application deployed Virtual Machine and Oracle Database@Azure resources.
+- Use the Virtual Machine to execute connectivity test and performance test against the deployed Oracle databases.
 
 ## 📋 Prerequisites
 
@@ -202,7 +202,7 @@ You have two options to run this microhack:
 > **To use Cloud Shell:**
 > 1. Open https://shell.azure.com or click the **Cloud Shell** icon in the Azure Portal header
 > 2. Select **PowerShell** as your shell environment
-> 3. Clone this repo: `git clone -b feature/simplify-infrastructure https://github.com/cpinotossi/msftmh.git`
+> 3. Clone this repo: `git clone --depth 1 --filter=blob:none --sparse https://github.com/cpinotossi/msftmh.git`
 > 4. Navigate to the microhack folder: `cd msftmh/03-Azure/01-03-Infrastructure/10_Oracle_on_Azure`
 >
 > All commands in this microhack will work in Cloud Shell without modification.
@@ -312,8 +312,8 @@ In this microhack, you deploy the ADB via the **Azure portal**. For production e
 > Setup the ADB exactly with the following settings:
 >
 > **ADB Deployment Settings:**
-> 1. Workload type: **OLTP**
-> 2. Database version: **23ai**
+> 1. Workload type: **Transaction Processing**
+> 2. Database version: **26ai**
 > 3. ECPU Count: **2**
 > 4. Compute auto scaling: **off**
 > 5. Storage: **20 GB**
@@ -321,6 +321,7 @@ In this microhack, you deploy the ADB via the **Azure portal**. For production e
 > 7. Backup retention period in days: **1 day**
 > 8. Administrator password: (do not use '!' inside your password)
 > 9. License type: **License included**
+> 10. Oracle database edition: **Enterprise Edition**
 
 
 Optional: After you started the ADB deployment please clone the Github repository. Instructions are listed in the challenge 2 at the end of the ADB deployment section - see **IMPORTANT: While you are waiting for the ADB creation**
@@ -344,9 +345,9 @@ Optional: After you started the ADB deployment please clone the Github repositor
 
 ### Challenge 3: Update NSG and DNS to connect the Oracle ADB 
 
-Although VNet peering connects the VM machine and ODAA networks, two additional configurations are required before VM machine can reach the database:
+Although VNet peering connects the Virtual Machine and ODAA networks, two additional configurations are required before Virtual Machine can reach the database:
 
-1. **NSG (Security):** The Oracle-managed NSG on the delegated subnet blocks all ingress by default. You must add an inbound rule that allows traffic from the VM machine CIDR (`10.0.0.0/16`).
+1. **NSG (Security):** The Oracle-managed NSG on the delegated subnet blocks all ingress by default. You must add an inbound rule that allows traffic from the Virtual Machine CIDR (`10.0.0.0/16`).
 
 2. **Private DNS (Name Resolution) for ADB:** The ADB's private FQDN (e.g., `abc123.adb.eu-paris-1.oraclecloud.com`) is not automatically resolvable from Azure. You must create a Private DNS Zone matching the Oracle domain and add an A record pointing the hostname to the ADB's private IP.
 
@@ -354,8 +355,8 @@ Once all are in place, the VM can resolve the database hostname(s) and its TCP c
 
 #### Actions
 
-* **NSG:** Add an inbound security rule in the OCI console to allow the VM machine CIDR (`10.0.0.0/16`).
-* **DNS:** Copy the "Database private URL" and "Database private IP" from the Azure Portal, then create an A record in the corresponding Azure Private DNS Zone linked to the VM machine VNet.
+* **NSG:** Add an inbound security rule in the OCI console to allow the Virtual Machine CIDR (`10.0.0.0/16`).
+* **DNS:** Copy the "Database private URL" and "Database private IP" from the Azure Portal, then create an A record in the corresponding Azure Private DNS Zone linked to the Virtual Machine VNet.
 
 #### DNS Configuration Diagrams
 
@@ -426,7 +427,7 @@ flowchart TB
 
 ### Challenge 4: Measure Network Performance to Your Oracle Database@Azure Autonomous Database
 
-Use the deployed tools on the VM machine to connect to the ADB instance. For the SQL latency test use the recommended tools
+Use the deployed tools on the Virtual Machine to connect to the ADB instance. For the SQL latency test use the recommended tools
 
 1. connping
 2. adbping
@@ -434,7 +435,7 @@ Use the deployed tools on the VM machine to connect to the ADB instance. For the
 and collect the round-trip results. Optionally supplement the findings with the lightweight TCP probe to observe connection setup timing.
 
 #### Actions
-* Log in to the VM machine and execute a first performance test against the deployed ADB.
+* Log in to the Virtual Machine and execute a first performance test against the deployed ADB.
 
 #### Success Criteria
 * Successful login to the ADB via the instant client / SQL Plus

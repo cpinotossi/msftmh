@@ -4,7 +4,7 @@
 
 ## 🌐 Network Security Group Configuration
 
-You need to update the Oracle ADB Network Security Group (NSG) with the CIDR range of the VNet where your AKS cluster is deployed. This can be done via the Azure Portal.
+You need to update the Oracle ADB Network Security Group (NSG) with the CIDR range of the VNet where your Virtual Machine is deployed. This can be done via the Azure Portal.
 
 See the [official Oracle documentation about Network Security Groups](https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/nsg-manage.htm) for more details about Oracle NSG.
 
@@ -49,9 +49,9 @@ From the overview portal of the deployed ADB database, copy the FQDN of the "dat
 
 ![ADB database overview](./media/adbdns8.png)
 
-### Move to the resource group rg-vm-user02
+### Move to the resource group rg-vm-userXX
 
-![AKS resource group](./media/adbdns9.png)
+![VM resource group](./media/adbdns9.png)
 
 ### Set private DNS 
 

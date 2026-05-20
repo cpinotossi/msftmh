@@ -46,7 +46,7 @@ Alle Workflows werden via `git commit` + `push` getriggert. Die Reihenfolge ist 
 
 ### Schritt 1: Users zurücksetzen (Passwörter + MFA)
 
-Wert des Atribute "mh-name" änderung im File `users/user_credentials.template.json`. Das triggert den Reset-Workflow.
+Wert des Attributs "mh-name" ändern im File `users/user_credentials.template.json`. Das triggert den Reset-Workflow.
 
 ```pwsh
 # z.B. mh-name setzen oder beliebige Änderung am Template
