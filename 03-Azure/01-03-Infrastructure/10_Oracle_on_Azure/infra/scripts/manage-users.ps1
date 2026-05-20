@@ -334,26 +334,18 @@ foreach ($userProp in $users) {
             $stats.PasswordSuccess++
         } else {
             try {
-                # Use az rest with JSON body via temp file to avoid shell escaping issues
-                $bodyObj = @{
+                # Use Graph API directly to avoid shell escaping issues with az ad user update
+                $encodedUpn = [System.Uri]::EscapeDataString($upn)
+                $body = @{
                     passwordProfile = @{
                         password                      = $newPwd
                         forceChangePasswordNextSignIn = $ForceChangeOnLogin
                     }
                 }
-                $tempPassword = $newPwd.Replace('"', '\"')
-                $result = az ad user update `
-                    --id $upn `
-                    --password "$tempPassword" `
-                    --force-change-password-next-sign-in $ForceChangeOnLogin 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Host "    Password rotated" -ForegroundColor Green
-                    $newPasswords[$userKey] = $newPwd
-                    $stats.PasswordSuccess++
-                } else {
-                    Write-Host "    ERROR: Password update failed - $result" -ForegroundColor Red
-                    $stats.PasswordError++
-                }
+                $result = Invoke-GraphApi -Method PATCH -Uri "https://graph.microsoft.com/v1.0/users/$encodedUpn" -Body $body
+                Write-Host "    Password rotated" -ForegroundColor Green
+                $newPasswords[$userKey] = $newPwd
+                $stats.PasswordSuccess++
             } catch {
                 Write-Host "    ERROR: Password update failed - $($_.Exception.Message)" -ForegroundColor Red
                 $stats.PasswordError++
