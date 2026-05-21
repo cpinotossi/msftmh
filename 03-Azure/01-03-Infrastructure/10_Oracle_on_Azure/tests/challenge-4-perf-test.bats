@@ -19,7 +19,7 @@ setup() {
 }
 
 @test "adbping is a real binary (not placeholder)" {
-  run file "$(which adbping)"
+  run file -L "$(which adbping)"
   assert_success
   assert_output --partial "ELF"
 }
