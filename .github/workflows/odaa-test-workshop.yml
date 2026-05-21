@@ -1,0 +1,302 @@
+# Deploy Test Runner + Run Workshop Challenge Tests
+# - Reads user_count from users/terraform.tfvars (single source of truth)
+# - Skips tests if commit message contains [skip-tests]
+# - Creates GitHub issue on failure for visibility
+name: 3 - Test Workshop
+
+on:
+  workflow_dispatch:
+    inputs:
+      user_index:
+        description: 'User index to test (e.g. 00, 01)'
+        required: true
+        default: '00'
+  workflow_run:
+    workflows: ["2 - Deploy Workshop"]
+    types: [completed]
+
+concurrency:
+  group: workshop-tests
+  cancel-in-progress: false
+
+env:
+  TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/test-runner'
+  USERS_TFVARS: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/users/terraform.tfvars'
+  TF_VERSION: '1.13.4'
+  TF_VAR_tenant_id: ${{ vars.TF_TENANT_ID }}
+  TF_VAR_mhcore_subscription_id: ${{ vars.TF_STATE_SUBSCRIPTION_ID }}
+  TF_VAR_mh0_subscription_id: ${{ vars.TF_MH0_SUBSCRIPTION_ID }}
+  TF_VAR_mhodaa_subscription_id: ${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}
+  TF_VAR_tf_state_storage: ${{ vars.TF_STATE_STORAGE }}
+  TF_VAR_tf_state_rg: ${{ vars.TF_STATE_RG }}
+  TF_VAR_tf_state_container: ${{ vars.TF_STATE_CONTAINER }}
+  USER_INDEX: ${{ github.event.inputs.user_index || '00' }}
+
+jobs:
+  preflight:
+    name: Preflight Checks
+    runs-on: [self-hosted, azure, container-apps, terraform]
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    outputs:
+      user_count: ${{ steps.config.outputs.user_count }}
+      should_run: ${{ steps.decision.outputs.should_run }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/users/terraform.tfvars
+          sparse-checkout-cone-mode: false
+
+      - name: Read user_count from users/terraform.tfvars
+        id: config
+        run: |
+          UC=$(grep -oP 'user_count\s*=\s*\K[0-9]+' "$USERS_TFVARS" || echo "0")
+          echo "user_count=$UC" >> $GITHUB_OUTPUT
+          echo "📊 user_count = $UC (from users/terraform.tfvars)"
+
+      - name: Check skip conditions
+        id: decision
+        run: |
+          # Skip if user_count is 0
+          if [[ "${{ steps.config.outputs.user_count }}" == "0" ]]; then
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Skipping: user_count=0"
+            exit 0
+          fi
+          
+          # Skip if triggered by workflow_run and commit contains [skip-tests]
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            COMMIT_MSG=$(git log -1 --format=%B "${{ github.event.workflow_run.head_sha }}" 2>/dev/null || echo "")
+            if [[ "$COMMIT_MSG" == *"[skip-tests]"* ]]; then
+              echo "should_run=false" >> $GITHUB_OUTPUT
+              echo "⏭️ Skipping: commit message contains [skip-tests]"
+              exit 0
+            fi
+          fi
+          
+          echo "should_run=true" >> $GITHUB_OUTPUT
+          echo "✅ Tests will run (user_count=${{ steps.config.outputs.user_count }})"
+
+  deploy-test-runner:
+    name: Deploy Test Runner
+    runs-on: [self-hosted, azure, container-apps, terraform]
+    needs: preflight
+    if: needs.preflight.outputs.should_run == 'true'
+    defaults:
+      run:
+        working-directory: ${{ env.TF_DIR }}
+    outputs:
+      vm_name: ${{ steps.outputs.outputs.vm_name }}
+      rg_name: ${{ steps.outputs.outputs.rg_name }}
+      deployed: ${{ steps.outputs.outputs.deployed }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra
+          sparse-checkout-cone-mode: false
+
+      - name: Install Terraform
+        run: |
+          cd /tmp
+          curl -sLO "https://releases.hashicorp.com/terraform/$TF_VERSION/terraform_${TF_VERSION}_linux_amd64.zip"
+          unzip -o terraform_${TF_VERSION}_linux_amd64.zip
+          sudo mv terraform /usr/local/bin/
+          terraform version
+
+      - name: Azure Login
+        run: |
+          az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
+          echo "ARM_USE_MSI=true" >> $GITHUB_ENV
+          echo "ARM_USE_CLI=false" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=$(az account show --query tenantId -o tsv)" >> $GITHUB_ENV
+          echo "AZURE_CONFIG_DIR=$(mktemp -d)" >> $GITHUB_ENV
+
+      - name: Start MSI Proxy
+        run: |
+          cat > /tmp/msi-proxy.py << 'PROXY'
+          import http.server, urllib.request, os, re
+          class H(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  q = self.path.find('?')
+                  qs = self.path[q:] if q >= 0 else ''
+                  qs = re.sub(r'api-version=[^&]+', 'api-version=2019-08-01', qs)
+                  url = os.environ['IDENTITY_ENDPOINT'] + qs
+                  req = urllib.request.Request(url)
+                  req.add_header('X-IDENTITY-HEADER', os.environ['IDENTITY_HEADER'])
+                  try:
+                      with urllib.request.urlopen(req) as resp:
+                          body = resp.read()
+                          self.send_response(200)
+                          self.send_header('Content-Type', 'application/json')
+                          self.end_headers()
+                          self.wfile.write(body)
+                  except urllib.error.HTTPError as e:
+                      body = e.read()
+                      self.send_response(e.code)
+                      self.send_header('Content-Type', 'application/json')
+                      self.end_headers()
+                      self.wfile.write(body)
+              def log_message(self, *a): pass
+          http.server.HTTPServer(('127.0.0.1', 54321), H).serve_forever()
+          PROXY
+          python3 /tmp/msi-proxy.py &
+          sleep 1
+          curl -sf "http://127.0.0.1:54321/msi/token?api-version=2019-08-01&resource=https://management.azure.com&client_id=$ARM_CLIENT_ID" | python3 -c "import sys,json; t=json.load(sys.stdin); print('MSI proxy OK, token type:', t.get('token_type','?'))"
+          echo "MSI_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
+          echo "ARM_MSI_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
+          echo "IDENTITY_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
+            -backend-config="use_msi=true" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="client_id=$ARM_CLIENT_ID" \
+            -backend-config="msi_endpoint=http://127.0.0.1:54321/msi/token" \
+            -backend-config="subscription_id=${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
+            -backend-config="tenant_id=$ARM_TENANT_ID"
+
+      - name: Terraform Apply
+        run: |
+          terraform apply -auto-approve \
+            -var="user_count=${{ needs.preflight.outputs.user_count }}"
+
+      - name: Get Outputs
+        id: outputs
+        run: |
+          echo "vm_name=$(terraform output -raw vm_name)" >> $GITHUB_OUTPUT
+          echo "rg_name=$(terraform output -raw resource_group_name)" >> $GITHUB_OUTPUT
+          echo "deployed=$(terraform output -raw deployed)" >> $GITHUB_OUTPUT
+
+  run-tests:
+    name: Run BATS Tests
+    runs-on: [self-hosted, azure, container-apps, terraform]
+    needs: [preflight, deploy-test-runner]
+    if: needs.deploy-test-runner.outputs.deployed == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/tests
+          sparse-checkout-cone-mode: false
+
+      - name: Azure Login
+        run: |
+          az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
+
+      - name: Wait for VM readiness
+        run: |
+          echo "Waiting 60s for cloud-init to complete BATS installation..."
+          sleep 60
+
+      - name: Deploy test files to VM
+        run: |
+          TESTS_DIR="03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/tests"
+          TAR_B64=$(tar -czf - -C "$TESTS_DIR" . | base64 -w0)
+          az vm run-command invoke \
+            --resource-group "${{ needs.deploy-test-runner.outputs.rg_name }}" \
+            --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
+            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
+            --command-id RunShellScript \
+            --scripts "echo '$TAR_B64' | base64 -d | tar -xzf - -C /opt/tests && chmod +x /opt/tests/run-tests.sh && echo 'Tests deployed successfully'"
+
+      - name: Run BATS Tests
+        id: tests
+        run: |
+          echo "Running workshop challenge tests on test-runner VM..."
+          RESULT=$(az vm run-command invoke \
+            --resource-group "${{ needs.deploy-test-runner.outputs.rg_name }}" \
+            --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
+            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
+            --command-id RunShellScript \
+            --scripts "export TEST_MH0_SUB='${{ vars.TF_MH0_SUBSCRIPTION_ID }}' && export TEST_MHODAA_SUB='${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}' && /opt/tests/run-tests.sh '${{ env.USER_INDEX }}'" \
+            -o json)
+          
+          echo "$RESULT" | jq -r '.value[0].message' | tee /tmp/test-output.txt
+          
+          # Check for test failures (TAP format: "not ok" = failure)
+          if echo "$RESULT" | jq -r '.value[0].message' | grep -q "^not ok"; then
+            echo "test_passed=false" >> $GITHUB_OUTPUT
+          else
+            echo "test_passed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "## 🧪 Workshop Challenge Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**User Index:** ${{ env.USER_INDEX }} | **Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/test-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No test output captured"
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.tests.outputs.test_passed }}" = "false" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **Some tests failed!** Review output above." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **All tests passed.**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  notify-failure:
+    name: Create Issue on Failure
+    runs-on: ubuntu-latest
+    needs: run-tests
+    if: failure()
+    permissions:
+      issues: write
+
+    steps:
+      - name: Create failure issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `🧪 Workshop tests failed (${new Date().toISOString().split('T')[0]})`;
+            const body = [
+              `## Test Failure Report`,
+              ``,
+              `| Field | Value |`,
+              `|-------|-------|`,
+              `| **Workflow Run** | [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) |`,
+              `| **Trigger** | ${context.eventName} |`,
+              `| **User Index** | ${{ env.USER_INDEX }} |`,
+              `| **Date** | ${new Date().toISOString()} |`,
+              ``,
+              `Review the workflow run for detailed test output (Step Summary).`,
+            ].join('\n');
+            
+            // Check if a similar open issue exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'test-failure',
+              state: 'open',
+            });
+            
+            if (issues.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['test-failure'],
+              });
+            } else {
+              // Comment on existing issue instead of creating duplicate
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues.data[0].number,
+                body: `### New failure (${new Date().toISOString()})\n\n${body}`,
+              });
+            }

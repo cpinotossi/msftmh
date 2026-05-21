@@ -1,0 +1,22 @@
+#cloud-config
+# ===============================================================================
+# Cloud-Init - Test Runner VM
+# Installs BATS testing framework. Test files are deployed by the pipeline.
+# ===============================================================================
+
+package_update: true
+packages:
+  - git
+  - jq
+  - dnsutils
+
+runcmd:
+  # Install BATS core + helpers
+  - git clone --depth 1 https://github.com/bats-core/bats-core.git /opt/bats
+  - /opt/bats/install.sh /usr/local
+  - git clone --depth 1 https://github.com/bats-core/bats-support.git /opt/bats-support
+  - git clone --depth 1 https://github.com/bats-core/bats-assert.git /opt/bats-assert
+  # Create test directory
+  - mkdir -p /opt/tests/helpers
+  # Signal readiness
+  - touch /opt/tests/.ready

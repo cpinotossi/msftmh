@@ -43,7 +43,7 @@ Press on the link "Network Security Groups" to reach the NSG page.
 Choose in the Rule as "Source Type" CIDR and add the copied VNet address space of the previous "vnet-vm-user<USER-NUMBER>" into the field. Finally, click the "Add" button to create the rule.
 ![OCI ADB NSG create Rule CIDR](media/adbdns7.png)
 
-### Set the private DNS zones for VNet "vnet-vm-user<USER-NUMBER>" via Azure Portal
+### Add a new private DNS zones A-Record for the ADB database
 
 From the overview portal of the deployed ADB database, copy the FQDN of the "database private url" and Database private IP address both in the section Network.
 
@@ -55,7 +55,7 @@ From the overview portal of the deployed ADB database, copy the FQDN of the "dat
 
 ### Set private DNS 
 
-Set DNS records for private DNS "adb.eu-paris-1.oraclecloud.com"
+Add a new DNS A-Records at the existing private DNS "adb.eu-paris-1.oraclecloud.com"
 
 Configure the **Recordsets** as following.
 

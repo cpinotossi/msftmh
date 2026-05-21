@@ -206,6 +206,21 @@ jobs:
       - name: Remove User VMs (user_count=0)
         run: terraform apply -auto-approve -var="user_count=0"
 
+      - name: Destroy Test Runner
+        working-directory: 03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/test-runner
+        run: |
+          terraform init \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
+            -backend-config="use_msi=true" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="client_id=$ARM_CLIENT_ID" \
+            -backend-config="msi_endpoint=http://127.0.0.1:54321/msi/token" \
+            -backend-config="subscription_id=${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
+            -backend-config="tenant_id=$ARM_TENANT_ID"
+          terraform apply -auto-approve -var="user_count=0"
+
       - name: Summary
         run: |
           echo "## ✅ Workshop Cleanup Complete" >> $GITHUB_STEP_SUMMARY
@@ -213,6 +228,7 @@ jobs:
           echo "### Actions Completed" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ All passwords rotated (old credentials invalidated)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ User VMs removed (user_count=0)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Test runner VM removed" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Shared resources preserved (Compute Gallery, ODAA VNet, etc.)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Manual Steps Required" >> $GITHUB_STEP_SUMMARY

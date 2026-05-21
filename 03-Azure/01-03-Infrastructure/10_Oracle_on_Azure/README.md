@@ -1,5 +1,7 @@
 ![ODAA microhack logo](media/logo_ODAA_microhack_1900x300.jpg)
 
+[![Test Workshop](https://github.com/cpinotossi/msftmh/actions/workflows/odaa-test-workshop.yml/badge.svg)](https://github.com/cpinotossi/msftmh/actions/workflows/odaa-test-workshop.yml)
+
 #  Microhack - Oracle Database @ Azure (ODAA)
 
 ##  Introduction
@@ -12,7 +14,7 @@ Oracle Database@Azure (ODAA) is the joint Oracle–Microsoft managed service tha
 ### What You Will Learn in the MicroHack
 You will learn how to create and configure an Autonomous Database Shared out of the offered Oracle Database@Azure services. How to deploy the Databases inside an Azure delegated subnet, update network security group (NSG) and DNS settings to enable connectivity from a simulated on-premises environment, and measure network performance to the Oracle Database instance. To make the microhack more realistic, we will deploy the Application layer (single Virtual Machine) and the Data layer (ODAA) in two different subscriptions to simulate a hub-and-spoke architecture. The following picture shows the high-level architecture of the microhack.
 
-![ODAA microhack architecture](media/Microhack_overview.jpg)
+<!--![ODAA microhack architecture](media/Microhack_overview.jpg) -->
 
 ```mermaid
 flowchart TB
@@ -400,14 +402,14 @@ Although VNet peering connects the Virtual Machine and ODAA networks, two additi
 
 1. **NSG (Security):** The Oracle-managed NSG on the delegated subnet blocks all ingress by default. You must add an inbound rule that allows traffic from the Virtual Machine CIDR (`10.0.0.0/16`).
 
-2. **Private DNS (Name Resolution) for ADB:** The ADB's private FQDN (e.g., `abc123.adb.eu-paris-1.oraclecloud.com`) is not automatically resolvable from Azure. You must create a Private DNS Zone matching the Oracle domain and add an A record pointing the hostname to the ADB's private IP.
+2. **Private DNS (Name Resolution) for ADB:** The ADB's private FQDN (e.g., `abc123.adb.eu-paris-1.oraclecloud.com`) is not automatically resolvable from Azure. A Private DNS Zone (`adb.eu-paris-1.oraclecloud.com`) already exists in your resource group and is linked to your VNet. You must add an A record pointing the ADB hostname to its private IP.
 
 Once all are in place, the VM can resolve the database hostname(s) and its TCP connections are permitted through the NSG.
 
 #### Actions
 
 * **NSG:** Add an inbound security rule in the OCI console to allow the Virtual Machine CIDR (`10.0.0.0/16`).
-* **DNS:** Copy the "Database private URL" and "Database private IP" from the Azure Portal, then create an A record in the corresponding Azure Private DNS Zone linked to the Virtual Machine VNet.
+* **DNS:** Copy the "Database private URL" and "Database private IP" from the Azure Portal, then add an A record in the existing Private DNS Zone (`adb.eu-paris-1.oraclecloud.com`) in your resource group.
 
 #### DNS Configuration Diagrams
 
@@ -448,8 +450,7 @@ flowchart TB
 **Steps**
 
 1. **Copy** the Database private URL and IP from the Azure Portal (ODAA ADB resource)
-2. **Create** a Private DNS Zone (e.g., `adb.eu-paris-1.oraclecloud.com`) and add an A record with the hostname pointing to the private IP
-3. **Link** the Private DNS Zone to the VM VNet so the VM can resolve the ADB FQDN
+2. **Add** an A record in the existing Private DNS Zone (`adb.eu-paris-1.oraclecloud.com`) with the ADB hostname pointing to the private IP
 
 
 
