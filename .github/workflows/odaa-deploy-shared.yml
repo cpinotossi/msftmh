@@ -1,14 +1,9 @@
 # Deploy Shared Infrastructure - Compute Gallery, ODAA VNets, Role Definition
-# Run once before deploying users. Rarely needs re-running.
+# Run manually — shared infra changes are rare and critical.
 name: 1 - Deploy Shared
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/shared/**'
 
 concurrency:
   group: workshop-shared
