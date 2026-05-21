@@ -90,35 +90,7 @@ resource "azurerm_subnet" "shared_odaa" {
   }
 }
 
-resource "azurerm_virtual_network" "basedb" {
-  provider            = azurerm.mhodaa
-  name                = "vnet-odaa-basedb"
-  location            = azurerm_resource_group.shared_odaa.location
-  resource_group_name = azurerm_resource_group.shared_odaa.name
-  address_space       = [var.basedb_vnet_cidr]
-  tags                = var.tags
-}
 
-resource "azurerm_subnet" "basedb" {
-  provider             = azurerm.mhodaa
-  name                 = "snet-odaa-basedb-delegated"
-  resource_group_name  = azurerm_resource_group.shared_odaa.name
-  virtual_network_name = azurerm_virtual_network.basedb.name
-  address_prefixes     = [cidrsubnet(var.basedb_vnet_cidr, 8, 0)]
-
-  default_outbound_access_enabled = true
-
-  delegation {
-    name = "oracle-delegation"
-    service_delegation {
-      name = "Oracle.Database/networkAttachments"
-      actions = [
-        "Microsoft.Network/networkinterfaces/*",
-        "Microsoft.Network/virtualNetworks/subnets/join/action"
-      ]
-    }
-  }
-}
 
 resource "azapi_resource" "resource_anchor" {
   type      = "Oracle.Database/resourceAnchors@2025-09-01"

@@ -23,7 +23,6 @@ image_name   = "oracle-workshop-vm"
 # ===============================================================================
 
 odaa_vnet_cidr     = "192.168.0.0/16"
-basedb_vnet_cidr   = "172.16.0.0/16"
 
 # Entra ID user group for shared ODAA RBAC (mh-odaa-user-grp)
 odaa_user_group_id = "5fbc2654-d343-401a-be86-08327fe66ec2"

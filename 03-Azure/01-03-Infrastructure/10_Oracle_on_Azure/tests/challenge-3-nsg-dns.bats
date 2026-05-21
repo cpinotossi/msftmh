@@ -12,7 +12,7 @@ setup() {
     --subscription "$TEST_MH0_SUB" \
     -o tsv --query "[?contains(name,'odaa')].peeringState"
   assert_success
-  # May return multiple peerings (ODAA + BaseDB), all must be Connected
+  # All ODAA peerings must be Connected
   refute_output ''
   while IFS= read -r line; do
     [[ "$line" == "Connected" ]]

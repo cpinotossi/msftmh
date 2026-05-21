@@ -5,7 +5,6 @@
 # - SSH key pair (shared across all VMs, admin emergency access)
 # - Nx User VMs with Bastion + unique /24 VNets (sub-mh0)
 # - Nx VNet peerings (user VM VNet <-> shared ODAA VNet)
-# - Nx VNet peerings (user VM VNet <-> shared BaseDB VNet)
 # - Nx DNS zone links (per-user DNS zone -> user VM VNet)
 #
 # Reads shared infrastructure outputs (Gallery, VNets, Role Def) from
@@ -93,25 +92,4 @@ module "peering" {
   tags                = var.tags
 }
 
-# ===============================================================================
-# VNET PEERING — User VM VNet <-> Shared BaseDB VNet
-# ===============================================================================
 
-module "peering_basedb" {
-  for_each = local.user_keys
-  source   = "../modules/vnet-peering"
-
-  providers = {
-    azurerm.mh0    = azurerm.mh0
-    azurerm.mhodaa = azurerm.mhodaa
-  }
-
-  vm_vnet_id          = module.user_vm[each.key].vnet_id
-  vm_vnet_name        = module.user_vm[each.key].vnet_name
-  vm_resource_group   = module.user_vm[each.key].resource_group_name
-  odaa_vnet_id        = local.shared.basedb_vnet_id
-  odaa_vnet_name      = local.shared.basedb_vnet_name
-  odaa_resource_group = local.shared.odaa_resource_group_name
-  peering_suffix      = "basedb-user${each.key}"
-  tags                = var.tags
-}

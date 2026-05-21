@@ -72,11 +72,7 @@ variable "odaa_vnet_cidr" {
   default     = "192.168.0.0/16"
 }
 
-variable "basedb_vnet_cidr" {
-  description = "CIDR block for the shared BaseDB VNet"
-  type        = string
-  default     = "172.16.0.0/16"
-}
+
 
 variable "odaa_user_group_id" {
   description = "Object ID of the Entra ID group (mh-odaa-user-grp) for shared ODAA RBAC"
