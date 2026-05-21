@@ -5,9 +5,9 @@
 set -euo pipefail
 
 export TEST_USER_INDEX="${1:-00}"
-export TEST_RG="rg-user${TEST_USER_INDEX}"
+export TEST_RG="rg-vm-user${TEST_USER_INDEX}"
 export TEST_VM="vm-user${TEST_USER_INDEX}"
-export TEST_VNET="vnet-user${TEST_USER_INDEX}"
+export TEST_VNET="vnet-vm-user${TEST_USER_INDEX}"
 export TEST_DNS_ZONE="adb.eu-paris-1.oraclecloud.com"
 
 echo "============================================"
