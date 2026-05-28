@@ -181,25 +181,30 @@ jobs:
           STATE=$(az rest --method GET \
             --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
             --query "properties.provisioningState" -o tsv 2>/dev/null || echo "NotFound")
-          if [[ "$STATE" != "NotFound" ]]; then
-            echo "⚠️ Leftover ADB found (state=$STATE). Deleting..."
+          if [[ "$STATE" == "NotFound" ]]; then
+            echo "✅ No leftover ADB found"
+            exit 0
+          fi
+          echo "⚠️ Leftover ADB found (state=$STATE)"
+          if [[ "$STATE" != "Deleting" ]]; then
+            echo "  Sending DELETE request..."
             az rest --method DELETE \
               --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01"
-            echo "⏳ Waiting for deletion to complete..."
-            for i in $(seq 1 60); do
-              STATUS=$(az rest --method GET \
-                --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
-                --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Gone")
-              if [[ "$STATUS" == "Gone" ]]; then
-                echo "✅ ADB deleted"
-                break
-              fi
-              echo "  Still deleting ($STATUS)... ($i/60)"
-              sleep 30
-            done
-          else
-            echo "✅ No leftover ADB found"
           fi
+          echo "⏳ Waiting for deletion to complete..."
+          for i in $(seq 1 60); do
+            STATUS=$(az rest --method GET \
+              --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
+              --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Gone")
+            if [[ "$STATUS" == "Gone" ]]; then
+              echo "✅ ADB deleted"
+              exit 0
+            fi
+            echo "  Still deleting ($STATUS)... ($i/60)"
+            sleep 30
+          done
+          echo "❌ Timeout waiting for ADB deletion"
+          exit 1
 
       - name: Deploy ADB via Bicep
         id: adb
