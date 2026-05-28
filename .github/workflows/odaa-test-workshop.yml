@@ -176,38 +176,46 @@ jobs:
         run: |
           az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
 
-      - name: Delete leftover ADB if exists
+      - name: Check existing ADB
+        id: check-adb
         run: |
-          STATE=$(az rest --method GET \
+          RESPONSE=$(az rest --method GET \
             --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
-            --query "properties.provisioningState" -o tsv 2>/dev/null || echo "NotFound")
-          if [[ "$STATE" == "NotFound" ]]; then
-            echo "✅ No leftover ADB found"
-            exit 0
-          fi
-          echo "⚠️ Leftover ADB found (state=$STATE)"
-          if [[ "$STATE" != "Deleting" ]]; then
-            echo "  Sending DELETE request..."
-            az rest --method DELETE \
-              --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01"
-          fi
-          echo "⏳ Waiting for deletion to complete..."
-          for i in $(seq 1 60); do
-            STATUS=$(az rest --method GET \
-              --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
-              --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Gone")
-            if [[ "$STATUS" == "Gone" ]]; then
-              echo "✅ ADB deleted"
-              exit 0
+            2>/dev/null || echo '{"error":"NotFound"}')
+          PROV_STATE=$(echo "$RESPONSE" | jq -r '.properties.provisioningState // "NotFound"')
+          LIFE_STATE=$(echo "$RESPONSE" | jq -r '.properties.lifecycleState // "NotFound"')
+          echo "provisioningState=$PROV_STATE lifecycleState=$LIFE_STATE"
+
+          if [[ "$PROV_STATE" == "Succeeded" && "$LIFE_STATE" == "Available" ]]; then
+            echo "✅ ADB exists and is Available — reusing"
+            ADB_IP=$(echo "$RESPONSE" | jq -r '.properties.privateEndpointIp')
+            ADB_LABEL=$(echo "$RESPONSE" | jq -r '.properties.privateEndpointLabel')
+            echo "adb_exists=true" >> $GITHUB_OUTPUT
+            echo "adb_ip=$ADB_IP" >> $GITHUB_OUTPUT
+            echo "adb_label=$ADB_LABEL" >> $GITHUB_OUTPUT
+          elif [[ "$PROV_STATE" == "NotFound" ]]; then
+            echo "✅ No ADB found — will create"
+            echo "adb_exists=false" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ ADB in unexpected state ($PROV_STATE/$LIFE_STATE) — deleting"
+            if [[ "$PROV_STATE" != "Deleting" ]]; then
+              az rest --method DELETE \
+                --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01"
             fi
-            echo "  Still deleting ($STATUS)... ($i/60)"
-            sleep 30
-          done
-          echo "❌ Timeout waiting for ADB deletion"
-          exit 1
+            echo "⏳ Waiting for deletion..."
+            for i in $(seq 1 60); do
+              STATUS=$(az rest --method GET \
+                --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
+                --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Gone")
+              if [[ "$STATUS" == "Gone" ]]; then echo "✅ Deleted"; break; fi
+              echo "  ($STATUS)... $i/60"; sleep 30
+            done
+            echo "adb_exists=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Deploy ADB via Bicep
-        id: adb
+        if: steps.check-adb.outputs.adb_exists != 'true'
+        id: adb-deploy
         run: |
           echo "🚀 Deploying ADB '$ADB_NAME' via Bicep (this takes ~20 minutes)..."
           BICEP_FILE="${{ env.TESTS_DIR }}/bicep/adb-test.bicep"
@@ -225,7 +233,7 @@ jobs:
             --subscription "${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}" \
             -o tsv --query id)
 
-          RESULT=$(az deployment group create \
+          az deployment group create \
             --resource-group rg-odaa-shared \
             --subscription "${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}" \
             --template-file "$BICEP_FILE" \
@@ -234,10 +242,31 @@ jobs:
               subnetId="$ODAA_SUBNET_ID" \
               vnetId="$ODAA_VNET_ID" \
               adbName="$ADB_NAME" \
-            --query "properties.outputs" -o json)
+            --no-wait
 
-          ADB_IP=$(echo "$RESULT" | jq -r '.privateEndpointIp.value')
-          ADB_LABEL=$(echo "$RESULT" | jq -r '.privateEndpointLabel.value')
+          echo "⏳ Waiting for ADB provisioning..."
+          for i in $(seq 1 90); do
+            STATE=$(az rest --method GET \
+              --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
+              --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Pending")
+            if [[ "$STATE" == "Succeeded" ]]; then
+              echo "✅ ADB provisioned"
+              break
+            elif [[ "$STATE" == "Failed" ]]; then
+              echo "❌ ADB provisioning failed"
+              exit 1
+            fi
+            echo "  Provisioning ($STATE)... $i/90"
+            sleep 20
+          done
+
+      - name: Get ADB outputs
+        id: adb
+        run: |
+          RESPONSE=$(az rest --method GET \
+            --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01")
+          ADB_IP=$(echo "$RESPONSE" | jq -r '.properties.privateEndpointIp')
+          ADB_LABEL=$(echo "$RESPONSE" | jq -r '.properties.privateEndpointLabel')
           echo "adb_ip=$ADB_IP" >> $GITHUB_OUTPUT
           echo "adb_label=$ADB_LABEL" >> $GITHUB_OUTPUT
           echo "✅ ADB deployed: IP=$ADB_IP, Label=$ADB_LABEL"
