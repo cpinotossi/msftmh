@@ -288,6 +288,7 @@ jobs:
           tenancy=${{ secrets.OCI_TENANCY_OCID }}
           region=${{ secrets.OCI_REGION }}
           key_file=~/.oci/oci_api_key.pem
+          pass_phrase=${{ secrets.OCI_PASSPHRASE }}
           EOF
           echo '${{ secrets.OCI_KEY_PEM }}' > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem ~/.oci/config
@@ -296,7 +297,6 @@ jobs:
         id: nsg
         env:
           OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: "True"
-          OCI_KEY_PASSPHRASE: ${{ secrets.OCI_PASSPHRASE }}
         run: |
           echo "🔒 Adding NSG ingress rule for 10.200.0.0/24..."
 
