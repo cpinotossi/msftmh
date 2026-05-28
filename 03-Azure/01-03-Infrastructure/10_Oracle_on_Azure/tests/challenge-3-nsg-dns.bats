@@ -46,7 +46,10 @@ setup() {
 }
 
 @test "OCI NSG has ingress rule allowing test-runner subnet" {
-  # Verify via OCI CLI that the NSG contains a rule for 10.200.0.0/24
+  # ODAA may not use OCI-side NSGs (Azure VNet provides isolation)
+  if [[ -z "$TEST_NSG_OCID" ]]; then
+    skip "No OCI NSG — ODAA uses Azure VNet for network isolation"
+  fi
   local rules
   rules=$(oci network nsg rules list \
     --nsg-id "$TEST_NSG_OCID" \
