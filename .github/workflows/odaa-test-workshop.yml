@@ -273,6 +273,9 @@ jobs:
 
       - name: Setup OCI CLI
         run: |
+          # Install pip if missing, then install oci-cli
+          python3 -m ensurepip --upgrade 2>/dev/null || \
+            (curl -sS https://bootstrap.pypa.io/get-pip.py | python3 - --user --quiet)
           python3 -m pip install --user oci-cli --quiet
           export PATH="$HOME/.local/bin:$PATH"
           echo "$HOME/.local/bin" >> $GITHUB_PATH
