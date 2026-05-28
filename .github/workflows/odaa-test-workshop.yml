@@ -1,16 +1,14 @@
-# Deploy Test Runner + Run Workshop Challenge Tests
-# - Reads user_count from users/terraform.tfvars (single source of truth)
-# - Skips tests if commit message contains [skip-tests]
-# - Creates GitHub issue on failure for visibility
+# ===============================================================================
+# End-to-End Workshop Challenge Tests (Standalone)
+# - Creates ADB via Bicep, NSG via OCI CLI, DNS A-record via az CLI
+# - Runs all BATS tests on test-runner VM (same image as user VMs)
+# - Cleans up ADB after tests complete
+# - Works independently of user_count (no user VM dependency)
+# ===============================================================================
 name: 3 - Test Workshop
 
 on:
   workflow_dispatch:
-    inputs:
-      user_index:
-        description: 'User index to test (e.g. 00, 01)'
-        required: true
-        default: '00'
   workflow_run:
     workflows: ["2 - Deploy Workshop"]
     types: [completed]
@@ -21,7 +19,7 @@ concurrency:
 
 env:
   TF_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/test-runner'
-  USERS_TFVARS: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/users/terraform.tfvars'
+  TESTS_DIR: '03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/tests'
   TF_VERSION: '1.13.4'
   TF_VAR_tenant_id: ${{ vars.TF_TENANT_ID }}
   TF_VAR_mhcore_subscription_id: ${{ vars.TF_STATE_SUBSCRIPTION_ID }}
@@ -30,7 +28,7 @@ env:
   TF_VAR_tf_state_storage: ${{ vars.TF_STATE_STORAGE }}
   TF_VAR_tf_state_rg: ${{ vars.TF_STATE_RG }}
   TF_VAR_tf_state_container: ${{ vars.TF_STATE_CONTAINER }}
-  USER_INDEX: ${{ github.event.inputs.user_index || '00' }}
+  ADB_NAME: 'adbtest00'
 
 jobs:
   preflight:
@@ -38,33 +36,18 @@ jobs:
     runs-on: [self-hosted, azure, container-apps, terraform]
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     outputs:
-      user_count: ${{ steps.config.outputs.user_count }}
       should_run: ${{ steps.decision.outputs.should_run }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
-            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra/users/terraform.tfvars
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/infra
           sparse-checkout-cone-mode: false
-
-      - name: Read user_count from users/terraform.tfvars
-        id: config
-        run: |
-          UC=$(grep -oP 'user_count\s*=\s*\K[0-9]+' "$USERS_TFVARS" || echo "0")
-          echo "user_count=$UC" >> $GITHUB_OUTPUT
-          echo "📊 user_count = $UC (from users/terraform.tfvars)"
 
       - name: Check skip conditions
         id: decision
         run: |
-          # Skip if user_count is 0
-          if [[ "${{ steps.config.outputs.user_count }}" == "0" ]]; then
-            echo "should_run=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Skipping: user_count=0"
-            exit 0
-          fi
-          
           # Skip if triggered by workflow_run and commit contains [skip-tests]
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             COMMIT_MSG=$(git log -1 --format=%B "${{ github.event.workflow_run.head_sha }}" 2>/dev/null || echo "")
@@ -74,9 +57,8 @@ jobs:
               exit 0
             fi
           fi
-          
           echo "should_run=true" >> $GITHUB_OUTPUT
-          echo "✅ Tests will run (user_count=${{ steps.config.outputs.user_count }})"
+          echo "✅ Tests will run"
 
   deploy-test-runner:
     name: Deploy Test Runner
@@ -89,7 +71,7 @@ jobs:
     outputs:
       vm_name: ${{ steps.outputs.outputs.vm_name }}
       rg_name: ${{ steps.outputs.outputs.rg_name }}
-      deployed: ${{ steps.outputs.outputs.deployed }}
+      dns_rg: ${{ steps.outputs.outputs.dns_rg }}
 
     steps:
       - uses: actions/checkout@v4
@@ -164,21 +146,146 @@ jobs:
 
       - name: Terraform Apply
         run: |
-          terraform apply -auto-approve \
-            -var="user_count=${{ needs.preflight.outputs.user_count }}"
+          terraform apply -auto-approve
 
       - name: Get Outputs
         id: outputs
         run: |
           echo "vm_name=$(terraform output -raw vm_name)" >> $GITHUB_OUTPUT
           echo "rg_name=$(terraform output -raw resource_group_name)" >> $GITHUB_OUTPUT
-          echo "deployed=$(terraform output -raw deployed)" >> $GITHUB_OUTPUT
+          echo "dns_rg=$(terraform output -raw dns_zone_rg)" >> $GITHUB_OUTPUT
+
+  setup-adb:
+    name: Create ADB + NSG + DNS
+    runs-on: [self-hosted, azure, container-apps, terraform]
+    needs: [preflight, deploy-test-runner]
+    if: needs.preflight.outputs.should_run == 'true'
+    outputs:
+      adb_ip: ${{ steps.adb.outputs.adb_ip }}
+      adb_label: ${{ steps.adb.outputs.adb_label }}
+      nsg_ocid: ${{ steps.nsg.outputs.nsg_ocid }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            03-Azure/01-03-Infrastructure/10_Oracle_on_Azure/tests/bicep
+          sparse-checkout-cone-mode: false
+
+      - name: Azure Login
+        run: |
+          az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
+
+      - name: Deploy ADB via Bicep
+        id: adb
+        run: |
+          echo "🚀 Deploying ADB '$ADB_NAME' via Bicep (this takes ~20 minutes)..."
+          BICEP_FILE="${{ env.TESTS_DIR }}/bicep/adb-test.bicep"
+
+          ODAA_VNET_ID=$(az network vnet show \
+            --name vnet-odaa-shared \
+            --resource-group rg-odaa-shared \
+            --subscription "${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}" \
+            -o tsv --query id)
+
+          ODAA_SUBNET_ID=$(az network vnet subnet show \
+            --name snet-odaa-delegated \
+            --vnet-name vnet-odaa-shared \
+            --resource-group rg-odaa-shared \
+            --subscription "${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}" \
+            -o tsv --query id)
+
+          RESULT=$(az deployment group create \
+            --resource-group rg-odaa-shared \
+            --subscription "${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}" \
+            --template-file "$BICEP_FILE" \
+            --parameters \
+              adminPassword='${{ secrets.ADB_ADMIN_PASSWORD }}' \
+              subnetId="$ODAA_SUBNET_ID" \
+              vnetId="$ODAA_VNET_ID" \
+              adbName="$ADB_NAME" \
+            --query "properties.outputs" -o json)
+
+          ADB_IP=$(echo "$RESULT" | jq -r '.privateEndpointIp.value')
+          ADB_LABEL=$(echo "$RESULT" | jq -r '.privateEndpointLabel.value')
+          echo "adb_ip=$ADB_IP" >> $GITHUB_OUTPUT
+          echo "adb_label=$ADB_LABEL" >> $GITHUB_OUTPUT
+          echo "✅ ADB deployed: IP=$ADB_IP, Label=$ADB_LABEL"
+
+      - name: Setup OCI CLI
+        run: |
+          pip install oci-cli --quiet 2>/dev/null || pipx install oci-cli 2>/dev/null || true
+          mkdir -p ~/.oci
+          cat > ~/.oci/config << EOF
+          [DEFAULT]
+          user=${{ secrets.OCI_USER_OCID }}
+          fingerprint=${{ secrets.OCI_FINGERPRINT }}
+          tenancy=${{ secrets.OCI_TENANCY_OCID }}
+          region=${{ secrets.OCI_REGION }}
+          key_file=~/.oci/oci_api_key.pem
+          EOF
+          echo '${{ secrets.OCI_KEY_PEM }}' > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem ~/.oci/config
+
+      - name: Add OCI NSG rule for test-runner subnet
+        id: nsg
+        env:
+          OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: "True"
+          OCI_KEY_PASSPHRASE: ${{ secrets.OCI_PASSPHRASE }}
+        run: |
+          echo "🔒 Adding NSG ingress rule for 10.200.0.0/24..."
+
+          # Find the NSG associated with the ADB
+          COMPARTMENT="${{ secrets.OCI_COMPARTMENT_OCID }}"
+          NSG_OCID=$(oci network nsg list \
+            --compartment-id "$COMPARTMENT" \
+            --query "data[0].id" --raw-output)
+          echo "nsg_ocid=$NSG_OCID" >> $GITHUB_OUTPUT
+
+          # Check if rule already exists
+          EXISTING=$(oci network nsg rules list \
+            --nsg-id "$NSG_OCID" \
+            --direction INGRESS \
+            --query "data[?source=='10.200.0.0/24'] | length(@)" --raw-output)
+
+          if [[ "$EXISTING" == "0" ]]; then
+            oci network nsg rules add \
+              --nsg-id "$NSG_OCID" \
+              --security-rules '[{
+                "direction": "INGRESS",
+                "protocol": "6",
+                "source": "10.200.0.0/24",
+                "sourceType": "CIDR_BLOCK",
+                "tcpOptions": {"destinationPortRange": {"min": 1522, "max": 1522}},
+                "description": "Allow test-runner to ADB (port 1522)"
+              }]'
+            echo "✅ NSG rule added"
+          else
+            echo "ℹ️ NSG rule already exists"
+          fi
+
+      - name: Create DNS A-record for ADB
+        run: |
+          echo "📝 Creating DNS A-record for ADB..."
+          ADB_IP="${{ steps.adb.outputs.adb_ip }}"
+          ADB_LABEL="${{ steps.adb.outputs.adb_label }}"
+          DNS_RG="${{ needs.deploy-test-runner.outputs.dns_rg }}"
+
+          # Create A-record in test-runner's private DNS zone
+          az network private-dns record-set a add-record \
+            --zone-name "adb.eu-paris-1.oraclecloud.com" \
+            --resource-group "$DNS_RG" \
+            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
+            --record-set-name "$ADB_LABEL" \
+            --ipv4-address "$ADB_IP" \
+            2>/dev/null || true
+
+          echo "✅ DNS A-record created: ${ADB_LABEL}.adb.eu-paris-1.oraclecloud.com → $ADB_IP"
 
   run-tests:
     name: Run BATS Tests
     runs-on: [self-hosted, azure, container-apps, terraform]
-    needs: [preflight, deploy-test-runner]
-    if: needs.deploy-test-runner.outputs.deployed == 'true'
+    needs: [deploy-test-runner, setup-adb]
 
     steps:
       - uses: actions/checkout@v4
@@ -193,8 +300,33 @@ jobs:
 
       - name: Wait for VM readiness
         run: |
-          echo "Waiting 60s for cloud-init to complete BATS installation..."
+          echo "Waiting 60s for cloud-init to complete..."
           sleep 60
+
+      - name: Setup OCI config on test-runner VM
+        run: |
+          az vm run-command invoke \
+            --resource-group "${{ needs.deploy-test-runner.outputs.rg_name }}" \
+            --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
+            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
+            --command-id RunShellScript \
+            --scripts "
+              mkdir -p /home/azureuser/.oci
+              cat > /home/azureuser/.oci/config << 'OCICONF'
+          [DEFAULT]
+          user=${{ secrets.OCI_USER_OCID }}
+          fingerprint=${{ secrets.OCI_FINGERPRINT }}
+          tenancy=${{ secrets.OCI_TENANCY_OCID }}
+          region=${{ secrets.OCI_REGION }}
+          key_file=/home/azureuser/.oci/oci_api_key.pem
+          OCICONF
+              echo '${{ secrets.OCI_KEY_PEM }}' > /home/azureuser/.oci/oci_api_key.pem
+              chmod 600 /home/azureuser/.oci/config /home/azureuser/.oci/oci_api_key.pem
+              chown -R azureuser:azureuser /home/azureuser/.oci
+              echo 'OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True' >> /etc/environment
+              echo 'OCI_KEY_PASSPHRASE=${{ secrets.OCI_PASSPHRASE }}' >> /etc/environment
+              echo 'TEST_NSG_OCID=${{ needs.setup-adb.outputs.nsg_ocid }}' >> /etc/environment
+            "
 
       - name: Deploy test files to VM
         run: |
@@ -210,17 +342,17 @@ jobs:
       - name: Run BATS Tests
         id: tests
         run: |
-          echo "Running workshop challenge tests on test-runner VM..."
+          echo "Running standalone E2E challenge tests on test-runner VM..."
           RESULT=$(az vm run-command invoke \
             --resource-group "${{ needs.deploy-test-runner.outputs.rg_name }}" \
             --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
             --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
             --command-id RunShellScript \
-            --scripts "export TEST_MH0_SUB='${{ vars.TF_MH0_SUBSCRIPTION_ID }}' && export TEST_MHODAA_SUB='${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}' && /opt/tests/run-tests.sh '${{ env.USER_INDEX }}'" \
+            --scripts "source /etc/environment 2>/dev/null; export TEST_MH0_SUB='${{ vars.TF_MH0_SUBSCRIPTION_ID }}' && export TEST_MHODAA_SUB='${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}' && export TEST_MHCORE_SUB='${{ vars.TF_STATE_SUBSCRIPTION_ID }}' && export TEST_ADB_NAME='$ADB_NAME' && export TEST_NSG_OCID='${{ needs.setup-adb.outputs.nsg_ocid }}' && /opt/tests/run-tests.sh" \
             -o json)
-          
+
           echo "$RESULT" | jq -r '.value[0].message' | tee /tmp/test-output.txt
-          
+
           # Check for test failures (TAP format: "not ok" = failure)
           if echo "$RESULT" | jq -r '.value[0].message' | grep -q "^not ok"; then
             echo "test_passed=false" >> $GITHUB_OUTPUT
@@ -231,14 +363,14 @@ jobs:
       - name: Test Summary
         if: always()
         run: |
-          echo "## 🧪 Workshop Challenge Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "## 🧪 Workshop Challenge Test Results (Standalone E2E)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**User Index:** ${{ env.USER_INDEX }} | **Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }} | **ADB:** $ADB_NAME" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/test-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No test output captured"
           echo '```' >> $GITHUB_STEP_SUMMARY
-          
+
           if [ "${{ steps.tests.outputs.test_passed }}" = "false" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "❌ **Some tests failed!** Review output above." >> $GITHUB_STEP_SUMMARY
@@ -247,6 +379,40 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "✅ **All tests passed.**" >> $GITHUB_STEP_SUMMARY
           fi
+
+  cleanup:
+    name: Cleanup ADB
+    runs-on: [self-hosted, azure, container-apps, terraform]
+    needs: [deploy-test-runner, setup-adb, run-tests]
+    if: always() && needs.setup-adb.result == 'success'
+
+    steps:
+      - name: Azure Login
+        run: |
+          az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
+
+      - name: Delete ADB
+        run: |
+          echo "🗑️ Deleting test ADB '$ADB_NAME'..."
+          az oracle-database autonomous-database delete \
+            --name "$ADB_NAME" \
+            --resource-group rg-odaa-shared \
+            --subscription "${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}" \
+            --yes --no-wait || true
+          echo "✅ ADB deletion initiated"
+
+      - name: Remove DNS A-record
+        run: |
+          echo "🗑️ Removing test DNS A-record..."
+          ADB_LABEL="${{ needs.setup-adb.outputs.adb_label }}"
+          DNS_RG="${{ needs.deploy-test-runner.outputs.dns_rg }}"
+          az network private-dns record-set a delete \
+            --zone-name "adb.eu-paris-1.oraclecloud.com" \
+            --resource-group "$DNS_RG" \
+            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
+            --name "$ADB_LABEL" \
+            --yes 2>/dev/null || true
+          echo "✅ DNS cleanup done"
 
   notify-failure:
     name: Create Issue on Failure
@@ -269,20 +435,19 @@ jobs:
               `|-------|-------|`,
               `| **Workflow Run** | [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) |`,
               `| **Trigger** | ${context.eventName} |`,
-              `| **User Index** | ${{ env.USER_INDEX }} |`,
+              `| **ADB** | ${process.env.ADB_NAME} |`,
               `| **Date** | ${new Date().toISOString()} |`,
               ``,
               `Review the workflow run for detailed test output (Step Summary).`,
             ].join('\n');
-            
-            // Check if a similar open issue exists
+
             const issues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               labels: 'test-failure',
               state: 'open',
             });
-            
+
             if (issues.data.length === 0) {
               await github.rest.issues.create({
                 owner: context.repo.owner,
@@ -292,7 +457,6 @@ jobs:
                 labels: ['test-failure'],
               });
             } else {
-              // Comment on existing issue instead of creating duplicate
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,

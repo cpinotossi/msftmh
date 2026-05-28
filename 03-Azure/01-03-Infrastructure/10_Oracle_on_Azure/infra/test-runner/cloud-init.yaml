@@ -1,7 +1,8 @@
 #cloud-config
 # ===============================================================================
 # Cloud-Init - Test Runner VM
-# Installs BATS testing framework. Test files are deployed by the pipeline.
+# Installs BATS testing framework and OCI CLI.
+# Test files + OCI credentials are deployed by the pipeline.
 # ===============================================================================
 
 package_update: true
@@ -9,6 +10,8 @@ packages:
   - git
   - jq
   - dnsutils
+  - python3-pip
+  - pipx
 
 runcmd:
   # Install BATS core + helpers
@@ -16,6 +19,8 @@ runcmd:
   - /opt/bats/install.sh /usr/local
   - git clone --depth 1 https://github.com/bats-core/bats-support.git /opt/bats-support
   - git clone --depth 1 https://github.com/bats-core/bats-assert.git /opt/bats-assert
+  # Install OCI CLI via pipx (non-interactive)
+  - PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install oci-cli
   # Create test directory
   - mkdir -p /opt/tests/helpers
   # Signal readiness

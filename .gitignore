@@ -203,3 +203,5 @@ id_rsa.pub
 
 # Ignore ARM Parameter files
 *.parameters.json
+# OCI credentials (API keys, config with secrets)
+**/.oci/

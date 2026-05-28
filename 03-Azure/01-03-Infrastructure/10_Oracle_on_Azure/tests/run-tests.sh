@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# Run all BATS challenge tests
-# Usage: ./run-tests.sh [user_index]
-# Env: TEST_MH0_SUB, TEST_MHODAA_SUB (set by pipeline via run-command)
+# Run all BATS challenge tests (standalone — no user VM dependency)
+# Env: TEST_MH0_SUB, TEST_MHODAA_SUB, TEST_MHCORE_SUB, TEST_ADB_NAME (set by pipeline)
 set -euo pipefail
 
-export TEST_USER_INDEX="${1:-00}"
-export TEST_RG="rg-vm-user${TEST_USER_INDEX}"
-export TEST_VM="vm-user${TEST_USER_INDEX}"
-export TEST_VNET="vnet-vm-user${TEST_USER_INDEX}"
-export TEST_DNS_ZONE="adb.eu-paris-1.oraclecloud.com"
+export TEST_DNS_RG="${TEST_DNS_RG:-rg-test-runner}"
+export TEST_DNS_SUB="${TEST_DNS_SUB:-$TEST_MHCORE_SUB}"
+export TEST_TR_RG="${TEST_TR_RG:-rg-test-runner}"
+export TEST_TR_VNET="${TEST_TR_VNET:-vnet-test-runner}"
+export TEST_ADB_NAME="${TEST_ADB_NAME:-adbtest00}"
 
 echo "============================================"
-echo "Workshop Challenge Tests"
+echo "Workshop Challenge Tests (Standalone E2E)"
 echo "============================================"
-echo "User Index: $TEST_USER_INDEX"
+echo "MHCORE Sub: $TEST_MHCORE_SUB"
 echo "MH0 Sub:    $TEST_MH0_SUB"
 echo "MHODAA Sub: $TEST_MHODAA_SUB"
+echo "ADB Name:   $TEST_ADB_NAME"
+echo "DNS RG:     $TEST_DNS_RG"
 echo "============================================"
 echo ""
 

@@ -45,7 +45,7 @@ variable "location" {
 }
 
 variable "user_count" {
-  description = "Current user count (test-runner deploys only when > 0)"
+  description = "Current user count (passed from pipeline, unused — test-runner always deploys)"
   type        = number
   default     = 0
 }

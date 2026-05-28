@@ -1,8 +1,6 @@
 #!/usr/bin/env bats
 # Challenge 4: Performance tools are available and ADB is reachable
-# NOTE: connping/adbping connectivity tests require an active ADB
-# instance with credentials. These tests validate tool availability
-# and basic network reachability.
+# Test-runner uses the same Gallery image as user VMs → has all Oracle tools.
 
 setup() {
   load 'helpers/setup'
@@ -31,23 +29,35 @@ setup() {
 }
 
 @test "ADB DNS resolves from test-runner network" {
-  # Skip if no A records exist yet (ADB not provisioned)
-  local records
-  records=$(az network private-dns record-set a list \
-    --zone-name "$TEST_DNS_ZONE" \
-    --resource-group "$TEST_RG" \
-    --subscription "$TEST_MH0_SUB" \
-    -o tsv --query "length(@)" 2>/dev/null || echo "0")
-  if [ "$records" -eq 0 ]; then
-    skip "No DNS A records found (ADB not yet provisioned)"
-  fi
   local host
   host=$(az network private-dns record-set a list \
     --zone-name "$TEST_DNS_ZONE" \
-    --resource-group "$TEST_RG" \
-    --subscription "$TEST_MH0_SUB" \
+    --resource-group "$TEST_DNS_RG" \
+    --subscription "$TEST_DNS_SUB" \
     -o tsv --query "[0].fqdn")
   run dig +short "$host"
   assert_success
   assert_output --regexp '^[0-9]+\.'
+}
+
+@test "connping reaches ADB endpoint" {
+  local ip
+  ip=$(az network private-dns record-set a list \
+    --zone-name "$TEST_DNS_ZONE" \
+    --resource-group "$TEST_DNS_RG" \
+    --subscription "$TEST_DNS_SUB" \
+    -o tsv --query "[0].aRecords[0].ipv4Address")
+  run connping "$ip" 1522
+  assert_success
+}
+
+@test "adbping reaches ADB endpoint" {
+  local ip
+  ip=$(az network private-dns record-set a list \
+    --zone-name "$TEST_DNS_ZONE" \
+    --resource-group "$TEST_DNS_RG" \
+    --subscription "$TEST_DNS_SUB" \
+    -o tsv --query "[0].aRecords[0].ipv4Address")
+  run adbping "$ip" 1522
+  assert_success
 }
