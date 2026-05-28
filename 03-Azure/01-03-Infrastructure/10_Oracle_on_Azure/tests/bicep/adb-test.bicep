@@ -26,7 +26,7 @@ resource adb 'Oracle.Database/autonomousDatabases@2025-03-01' = {
     isAutoScalingForStorageEnabled: false
     backupRetentionPeriodInDays: 1
     adminPassword: adminPassword
-    licenseModel: 'LicenseIncluded'
+    licenseModel: 'BringYourOwnLicense'
     databaseEdition: 'EnterpriseEdition'
     characterSet: 'AL32UTF8'
     ncharacterSet: 'AL16UTF16'

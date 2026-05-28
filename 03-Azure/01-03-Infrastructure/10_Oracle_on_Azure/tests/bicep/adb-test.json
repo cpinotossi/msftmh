@@ -1,0 +1,75 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.42.1.51946",
+      "templateHash": "3164847615314045889"
+    }
+  },
+  "parameters": {
+    "adminPassword": {
+      "type": "securestring"
+    },
+    "subnetId": {
+      "type": "string"
+    },
+    "vnetId": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "francecentral"
+    },
+    "adbName": {
+      "type": "string",
+      "defaultValue": "adbtest00"
+    }
+  },
+  "resources": [
+    {
+      "type": "Oracle.Database/autonomousDatabases",
+      "apiVersion": "2025-03-01",
+      "name": "[parameters('adbName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "displayName": "[parameters('adbName')]",
+        "dataBaseType": "Regular",
+        "dbWorkload": "OLTP",
+        "dbVersion": "26ai",
+        "computeModel": "ECPU",
+        "computeCount": 2,
+        "isAutoScalingEnabled": false,
+        "dataStorageSizeInGbs": 20,
+        "isAutoScalingForStorageEnabled": false,
+        "backupRetentionPeriodInDays": 1,
+        "adminPassword": "[parameters('adminPassword')]",
+        "licenseModel": "BringYourOwnLicense",
+        "databaseEdition": "EnterpriseEdition",
+        "characterSet": "AL32UTF8",
+        "ncharacterSet": "AL16UTF16",
+        "subnetId": "[parameters('subnetId')]",
+        "vnetId": "[parameters('vnetId')]"
+      }
+    }
+  ],
+  "outputs": {
+    "adbId": {
+      "type": "string",
+      "value": "[resourceId('Oracle.Database/autonomousDatabases', parameters('adbName'))]"
+    },
+    "adbName": {
+      "type": "string",
+      "value": "[parameters('adbName')]"
+    },
+    "privateEndpointIp": {
+      "type": "string",
+      "value": "[reference(resourceId('Oracle.Database/autonomousDatabases', parameters('adbName')), '2025-03-01').privateEndpointIp]"
+    },
+    "privateEndpointLabel": {
+      "type": "string",
+      "value": "[reference(resourceId('Oracle.Database/autonomousDatabases', parameters('adbName')), '2025-03-01').privateEndpointLabel]"
+    }
+  }
+}
