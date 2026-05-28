@@ -176,6 +176,31 @@ jobs:
         run: |
           az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
 
+      - name: Delete leftover ADB if exists
+        run: |
+          STATE=$(az rest --method GET \
+            --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
+            --query "properties.provisioningState" -o tsv 2>/dev/null || echo "NotFound")
+          if [[ "$STATE" != "NotFound" ]]; then
+            echo "⚠️ Leftover ADB found (state=$STATE). Deleting..."
+            az rest --method DELETE \
+              --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01"
+            echo "⏳ Waiting for deletion to complete..."
+            for i in $(seq 1 60); do
+              STATUS=$(az rest --method GET \
+                --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
+                --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Gone")
+              if [[ "$STATUS" == "Gone" ]]; then
+                echo "✅ ADB deleted"
+                break
+              fi
+              echo "  Still deleting ($STATUS)... ($i/60)"
+              sleep 30
+            done
+          else
+            echo "✅ No leftover ADB found"
+          fi
+
       - name: Deploy ADB via Bicep
         id: adb
         run: |
