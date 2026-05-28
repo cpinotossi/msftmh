@@ -214,7 +214,10 @@ jobs:
 
       - name: Setup OCI CLI
         run: |
-          pip install oci-cli --quiet 2>/dev/null || pipx install oci-cli 2>/dev/null || true
+          python3 -m pip install --user oci-cli --quiet
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          oci --version
           mkdir -p ~/.oci
           cat > ~/.oci/config << EOF
           [DEFAULT]
