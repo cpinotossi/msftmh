@@ -298,21 +298,38 @@ jobs:
         env:
           OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: "True"
         run: |
-          echo "🔒 Checking for OCI NSG (ODAA may not use OCI-side NSGs)..."
+          echo "🔒 Looking up OCI NSG for ADB..."
 
-          # Find the NSG associated with the ADB (ODAA uses Azure networking,
-          # so this may return empty — that's OK)
-          COMPARTMENT="${{ secrets.OCI_COMPARTMENT_OCID }}"
-          NSG_OCID=$(oci network nsg list \
-            --compartment-id "$COMPARTMENT" \
-            --query "data[0].id" --raw-output 2>/dev/null || true)
+          # ODAA creates NSGs in a sub-compartment named after the Azure subscription ID.
+          # Find that compartment first, then locate the ADB's NSG.
+          TENANCY="${{ secrets.OCI_TENANCY_OCID }}"
+          SUB_ID="${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}"
 
-          if [[ -z "$NSG_OCID" || "$NSG_OCID" == "None" ]]; then
-            echo "ℹ️ No OCI NSG found — ODAA uses Azure VNet for network isolation"
+          NSG_COMPARTMENT=$(oci iam compartment list \
+            --compartment-id "$TENANCY" \
+            --compartment-id-in-subtree true --all \
+            --query "data[?name=='$SUB_ID'].id | [0]" --raw-output 2>/dev/null || true)
+
+          if [[ -z "$NSG_COMPARTMENT" || "$NSG_COMPARTMENT" == "None" ]]; then
+            echo "⚠️ Could not find subscription compartment in OCI"
             echo "nsg_ocid=" >> $GITHUB_OUTPUT
             exit 0
           fi
 
+          echo "  Found NSG compartment: $NSG_COMPARTMENT"
+
+          # Find the NSG matching our ADB name
+          NSG_OCID=$(oci network nsg list \
+            --compartment-id "$NSG_COMPARTMENT" \
+            --query "data[?\"display-name\"=='${ADB_NAME}_NSG'] | [0].id" --raw-output 2>/dev/null || true)
+
+          if [[ -z "$NSG_OCID" || "$NSG_OCID" == "None" ]]; then
+            echo "ℹ️ No NSG named ${ADB_NAME}_NSG found"
+            echo "nsg_ocid=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "  Found NSG: $NSG_OCID"
           echo "nsg_ocid=$NSG_OCID" >> $GITHUB_OUTPUT
 
           # Check if rule already exists
