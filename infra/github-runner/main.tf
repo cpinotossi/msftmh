@@ -269,3 +269,20 @@ resource "terraform_data" "keda_labels" {
 
   depends_on = [module.github_runner]
 }
+
+# ===============================================================================
+# Replica Timeout (90 minutes)
+# ===============================================================================
+# The AVM module defaults replicaTimeout to 1800s (30 min), which is too short
+# for workflows that provision Oracle ADB (~35 min) + run tests + cleanup.
+# ===============================================================================
+
+resource "terraform_data" "replica_timeout" {
+  triggers_replace = [module.github_runner.job_resource_id]
+
+  provisioner "local-exec" {
+    command = "az containerapp job update --name caj-odaamh --resource-group ${azurerm_resource_group.runner.name} --subscription ${var.sub_mhcore_id} --replica-timeout 5400"
+  }
+
+  depends_on = [module.github_runner]
+}
