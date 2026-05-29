@@ -156,6 +156,7 @@ id_rsa.pub
 user_credentials.txt
 user_credentials.json
 **/user_credentials.json
+user-credentials-*/
 members.json
 
 # Kubeconfig files
