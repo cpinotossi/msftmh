@@ -71,6 +71,7 @@ flowchart TB
     style ORA fill:#C74634,color:#fff
     style PDZ_VM fill:#C74634,color:#fff
     style PDZ_ODAA fill:#C74634,color:#fff
+    linkStyle default stroke:#fff,stroke-width:2px
 ```
 
 In an extended hackathon (not part of the following hackathon), we can integrate ODAA and their services into existing Azure native services like AKV, Azure EntraID, etc. and use GoldenGate for migrations to ODAA and integration into Azure Fabric. 
@@ -126,6 +127,7 @@ flowchart TB
     style VM fill:#FFB900,color:#000
     style DNS fill:#50E6FF,color:#000
     style NSG fill:#F25022,color:#fff
+    linkStyle default stroke:#fff,stroke-width:2px
 ```
 
 
