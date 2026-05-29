@@ -86,7 +86,7 @@ client_id     = "8a9f736e-4eb2-4484-ae90-2493f57102b3"
 client_secret = "your-client-secret"
 
 # Subscription Configuration (for RBAC assignments)
-# sub-mhcore - Runner wird hier deployed
+# sub-mhcore - Runner is deployed here
 sub_mhcore_id  = "09808f31-065f-4231-914d-776c2d6bbe34"
 # sub-mh0 - Workshop VMs, VNets
 sub_mh0_id     = "556f9b63-ebc9-4c7e-8437-9a05aa8cdb25"
