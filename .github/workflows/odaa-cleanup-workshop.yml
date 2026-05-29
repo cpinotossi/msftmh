@@ -31,6 +31,7 @@ env:
   CREDS_FILE: 'infra/user_credentials.json'
   TF_VERSION: '1.13.4'
   TF_VAR_tenant_id: ${{ vars.TF_TENANT_ID }}
+  TF_VAR_mhcore_subscription_id: ${{ vars.TF_STATE_SUBSCRIPTION_ID }}
   TF_VAR_mh0_subscription_id: ${{ vars.TF_MH0_SUBSCRIPTION_ID }}
   TF_VAR_mhodaa_subscription_id: ${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}
   TF_VAR_tf_state_storage: ${{ vars.TF_STATE_STORAGE }}
