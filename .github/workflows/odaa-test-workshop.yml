@@ -598,13 +598,13 @@ jobs:
 
       - name: Delete ADB
         run: |
-          echo "🗑️ Deleting test ADB '$ADB_NAME'..."
+          echo "🗑️ Deleting test ADB '$ADB_NAME' (this may take several minutes)..."
           az oracle-database autonomous-database delete \
             --name "$ADB_NAME" \
             --resource-group rg-odaa-shared \
             --subscription "${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}" \
-            --yes --no-wait || true
-          echo "✅ ADB deletion initiated"
+            --yes || true
+          echo "✅ ADB deleted"
 
       - name: Remove DNS A-record
         run: |
