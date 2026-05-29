@@ -16,8 +16,10 @@
 # ===============================================================================
 
 locals {
-  shared    = data.terraform_remote_state.shared.outputs
-  user_keys = toset([for i in range(var.user_count) : format("%02d", i)])
+  shared      = data.terraform_remote_state.shared.outputs
+  user_keys   = toset([for i in range(var.user_count) : format("%02d", i)])
+  credentials = jsondecode(file("${path.module}/user_credentials.template.json"))
+  tags        = merge(var.tags, { "mh-name" = local.credentials["mh-name"] })
 }
 
 # ===============================================================================
@@ -65,7 +67,7 @@ module "user_vm" {
   entra_id_user_object_id = lookup(var.user_object_ids, each.key, null)
   entra_id_admin_login    = var.entra_id_admin_login
 
-  tags = var.tags
+  tags = local.tags
 }
 
 
@@ -89,7 +91,7 @@ module "peering" {
   odaa_vnet_name      = local.shared.odaa_vnet_name
   odaa_resource_group = local.shared.odaa_resource_group_name
   peering_suffix      = "user${each.key}"
-  tags                = var.tags
+  tags                = local.tags
 }
 
 
