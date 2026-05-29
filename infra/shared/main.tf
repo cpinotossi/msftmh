@@ -150,17 +150,19 @@ resource "azurerm_role_definition" "odaa_db_creator" {
 }
 
 # ===============================================================================
-# RBAC: User group gets Oracle Database Creator on shared ODAA RG
+# RBAC: User group gets Oracle Database Creator on ODAA subscription
 # ===============================================================================
-# Needed for network read/join on the shared VNet when creating DBs via Portal.
+# Scope must be subscription-level because the Portal Create wizard calls
+# subscription-level APIs (e.g. listCloudAccountDetails, oracleSubscriptions).
+# A resource-group-scoped assignment causes 403 on those calls.
 # ===============================================================================
 
 resource "azurerm_role_assignment" "shared_odaa_group" {
   provider           = azurerm.mhodaa
-  scope              = azurerm_resource_group.shared_odaa.id
+  scope              = "/subscriptions/${var.mhodaa_subscription_id}"
   role_definition_id = azurerm_role_definition.odaa_db_creator.role_definition_resource_id
   principal_id       = var.odaa_user_group_id
-  description        = "Allows workshop user group to read/join shared ODAA VNet for DB creation"
+  description        = "Allows workshop user group to create Oracle DBs and use shared VNet"
 }
 
 # ===============================================================================
