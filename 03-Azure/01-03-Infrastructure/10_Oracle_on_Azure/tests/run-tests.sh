@@ -3,6 +3,10 @@
 # Env: TEST_MH0_SUB, TEST_MHODAA_SUB, TEST_MHCORE_SUB, TEST_ADB_NAME (set by pipeline)
 set -euo pipefail
 
+# Load Oracle environment (rwloadsim, instant client, etc.)
+# Needed because az vm run-command uses non-login shell (no /etc/profile.d/)
+source /etc/profile.d/oracle-workshop.sh 2>/dev/null || true
+
 export TEST_DNS_RG="${TEST_DNS_RG:-rg-test-runner}"
 export TEST_DNS_SUB="${TEST_DNS_SUB:-$TEST_MHCORE_SUB}"
 export TEST_TR_RG="${TEST_TR_RG:-rg-test-runner}"
