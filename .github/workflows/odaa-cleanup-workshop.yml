@@ -112,8 +112,7 @@ jobs:
 
   rotate-passwords:
     name: Reset Passwords & MFA (Invalidate)
-    needs: [validate, delete-adbs]
-    if: always() && needs.validate.result == 'success' && (needs.delete-adbs.result == 'success' || needs.delete-adbs.result == 'skipped')
+    needs: validate
     runs-on: [self-hosted, azure, container-apps, terraform]
     
     defaults:
@@ -147,7 +146,8 @@ jobs:
 
   destroy:
     name: Destroy Infrastructure
-    needs: rotate-passwords
+    needs: [rotate-passwords, delete-adbs]
+    if: always() && needs.rotate-passwords.result == 'success' && (needs.delete-adbs.result == 'success' || needs.delete-adbs.result == 'skipped')
     runs-on: [self-hosted, azure, container-apps, terraform]
     
     defaults:
