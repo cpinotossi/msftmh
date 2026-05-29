@@ -343,13 +343,12 @@ jobs:
               --nsg-id "$NSG_OCID" \
               --security-rules '[{
                 "direction": "INGRESS",
-                "protocol": "6",
+                "protocol": "all",
                 "source": "10.200.0.0/24",
                 "sourceType": "CIDR_BLOCK",
-                "tcpOptions": {"destinationPortRange": {"min": 1522, "max": 1522}},
-                "description": "Allow test-runner to ADB (port 1522)"
+                "description": "Allow test-runner to ADB (all protocols)"
               }]'
-            echo "✅ NSG rule added"
+            echo "✅ NSG rule added (all protocols, all ports)"
           else
             echo "ℹ️ NSG rule already exists"
           fi
@@ -619,6 +618,32 @@ jobs:
             --name "$ADB_LABEL" \
             --yes 2>/dev/null || true
           echo "✅ DNS cleanup done"
+
+      - name: Remove OCI NSG Rule
+        if: always() && needs.setup-adb.outputs.nsg_ocid != ''
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+        run: |
+          echo "🗑️ Removing test-runner NSG rule..."
+          pip install -q oci-cli 2>/dev/null
+          NSG_OCID="${{ needs.setup-adb.outputs.nsg_ocid }}"
+          # Find and remove rules with source 10.200.0.0/24
+          RULE_IDS=$(oci network nsg rules list \
+            --nsg-id "$NSG_OCID" \
+            --direction INGRESS \
+            --query "data[?source=='10.200.0.0/24'].id" --raw-output 2>/dev/null | tr -d '[]" ' | tr ',' '\n')
+          for RULE_ID in $RULE_IDS; do
+            [[ -z "$RULE_ID" || "$RULE_ID" == "None" ]] && continue
+            oci network nsg rules remove \
+              --nsg-id "$NSG_OCID" \
+              --security-rule-ids "[\"$RULE_ID\"]" --force 2>/dev/null || true
+            echo "  Removed rule: $RULE_ID"
+          done
+          echo "✅ NSG rules cleaned up"
 
   notify-failure:
     name: Create Issue on Failure
