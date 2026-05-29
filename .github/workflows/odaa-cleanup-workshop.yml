@@ -1,10 +1,10 @@
 # Cleanup Workshop - Run after workshop ends
 #
 # This workflow:
-# 1. Resets ALL passwords + MFA (invalidates old credentials)
-# 2. Removes user VMs by setting user_count=0 (shared resources remain)
-#
-# IMPORTANT: Delete all Oracle databases manually BEFORE running!
+# 1. Deletes ALL Oracle Autonomous Databases in rg-odaa-* resource groups
+# 2. Resets ALL passwords + MFA (invalidates old credentials)
+# 3. Removes user VMs by setting user_count=0 (shared resources remain)
+# 4. Cleans up OCI networking (VCNs, NSGs, subnets)
 #
 name: 3 - Cleanup Workshop
 
@@ -15,8 +15,8 @@ on:
         description: 'Type "CLEANUP" to confirm'
         required: true
         type: string
-      skip_oracle_check:
-        description: 'Skip Oracle database check (use with caution!)'
+      skip_adb_delete:
+        description: 'Skip ADB deletion (if already deleted manually)'
         required: false
         default: false
         type: boolean
@@ -55,43 +55,65 @@ jobs:
           fi
           echo "✅ Cleanup confirmed"
 
-  check-oracle:
-    name: Check Oracle Databases
+  delete-adbs:
+    name: Delete Oracle Databases
     needs: validate
     runs-on: [self-hosted, azure, container-apps, terraform]
-    if: ${{ github.event.inputs.skip_oracle_check != 'true' }}
+    if: ${{ github.event.inputs.skip_adb_delete != 'true' }}
     
     steps:
       - name: Azure Login
         run: az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
 
-      - name: Check for Oracle Databases
+      - name: Find and Delete All ADBs
         run: |
-          echo "Checking for Oracle Autonomous Databases..."
+          echo "🔍 Discovering Oracle Autonomous Databases..."
+          
+          az account set -s "$TF_VAR_mhodaa_subscription_id"
           
           ODAA_RGS=$(az group list --query "[?starts_with(name, 'rg-odaa-')].name" -o tsv)
+          DELETED=0
+          FAILED=0
           
-          DATABASES_FOUND=false
           for RG in $ODAA_RGS; do
-            echo "Checking resource group: $RG"
-            DBS=$(az oracle autonomous-database list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null || true)
-            if [ -n "$DBS" ]; then
-              echo "::error::Found Oracle databases in $RG: $DBS"
-              DATABASES_FOUND=true
-            fi
+            DBS=$(az oracle-database autonomous-database list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null || true)
+            for DB in $DBS; do
+              echo "🗑️ Deleting ADB '$DB' in resource group '$RG'..."
+              if az oracle-database autonomous-database delete \
+                --name "$DB" \
+                --resource-group "$RG" \
+                --yes 2>&1; then
+                echo "  ✅ Deleted: $DB"
+                DELETED=$((DELETED + 1))
+              else
+                echo "  ❌ Failed to delete: $DB"
+                FAILED=$((FAILED + 1))
+              fi
+            done
           done
           
-          if [ "$DATABASES_FOUND" = true ]; then
-            echo "::error::Please delete all Oracle databases before cleanup!"
+          echo ""
+          echo "📊 Summary: $DELETED deleted, $FAILED failed"
+          
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::$FAILED ADB deletion(s) failed"
             exit 1
           fi
           
-          echo "✅ No Oracle databases found"
+          if [ "$DELETED" -eq 0 ]; then
+            echo "ℹ️ No ADBs found — nothing to delete"
+          fi
+
+      - name: ADB Deletion Summary
+        if: always()
+        run: |
+          echo "### Oracle ADB Cleanup" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ All Oracle Autonomous Databases deleted" >> $GITHUB_STEP_SUMMARY
 
   rotate-passwords:
     name: Reset Passwords & MFA (Invalidate)
-    needs: [validate, check-oracle]
-    if: always() && needs.validate.result == 'success' && (needs.check-oracle.result == 'success' || needs.check-oracle.result == 'skipped')
+    needs: [validate, delete-adbs]
+    if: always() && needs.validate.result == 'success' && (needs.delete-adbs.result == 'success' || needs.delete-adbs.result == 'skipped')
     runs-on: [self-hosted, azure, container-apps, terraform]
     
     defaults:
@@ -231,7 +253,7 @@ jobs:
           echo "- ✅ Test runner VM removed" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Shared resources preserved (Compute Gallery, ODAA VNet, etc.)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Manual Steps Required" >> $GITHUB_STEP_SUMMARY
+          echo "### Remaining Manual Steps" >> $GITHUB_STEP_SUMMARY
           echo "- ⚠️ Reset MFA manually if needed (Portal → Users → Authentication methods)" >> $GITHUB_STEP_SUMMARY
 
   cleanup-oci:

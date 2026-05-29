@@ -87,13 +87,14 @@ gh run watch $(gh run list --workflow="odaa-deploy-workshop.yml" --repo cpinotos
 
 ## After the Workshop
 
-### Step 1: Delete Oracle Databases
+Run the Cleanup Workflow. It automatically:
 
-Users must delete all Oracle Autonomous Databases they created during the workshop **before** running cleanup. This must be done manually via the Azure Portal or CLI because ODAA resources are co-managed with Oracle and cannot be destroyed by Terraform.
+1. Deletes all Oracle Autonomous Databases in `rg-odaa-*` resource groups
+2. Resets all passwords and MFA (invalidating old credentials)
+3. Destroys user VMs and test-runner (`user_count=0`)
+4. Cleans up orphaned OCI networking (VCNs, NSGs, subnets)
 
-### Step 2: Run the Cleanup Workflow
-
-The cleanup workflow resets all passwords + MFA (invalidating old credentials) and destroys user VMs by setting `user_count=0`. Shared infrastructure (Gallery, VNets, Role Definitions) remains intact for the next workshop.
+Shared infrastructure (Gallery, VNets, Role Definitions) remains intact for the next workshop.
 
 ```pwsh
 gh workflow run "3 - Cleanup Workshop" --repo cpinotossi/msftmh -f confirmation=CLEANUP
@@ -101,7 +102,7 @@ gh workflow run "3 - Cleanup Workshop" --repo cpinotossi/msftmh -f confirmation=
 gh run watch $(gh run list --workflow="odaa-cleanup-workshop.yml" --repo cpinotossi/msftmh --limit 1 --json databaseId -q ".[0].databaseId") --repo cpinotossi/msftmh --exit-status
 ```
 
-> **Note:** The workflow requires typing `CLEANUP` as confirmation. If Oracle databases still exist, the workflow will fail unless you pass `skip_oracle_check=true`.
+> **Note:** The workflow requires typing `CLEANUP` as confirmation. If ADBs were already deleted manually, pass `skip_adb_delete=true` to skip that step.
 
 ## Workflows
 
@@ -114,7 +115,7 @@ All CI/CD workflows run on a self-hosted GitHub Actions runner deployed as a Con
 | 1b | `1 - Reset Users` | Push to `infra/users/user_credentials.template.json` | Rotates passwords and clears MFA for all 25 users. Uploads new credentials as artifact. |
 | 2 | `2 - Deploy Workshop` | Push to `infra/users/terraform.tfvars` | Deploys per-user infrastructure (VMs, VNets, Peerings, Bastion, NAT Gateway) based on `user_count`. |
 | 3a | `3 - Test Workshop` | After `2 - Deploy Workshop` completes, or manual | End-to-end challenge tests. Creates a test ADB, runs BATS tests on a test-runner VM, cleans up. |
-| 3b | `3 - Cleanup Workshop` | `workflow_dispatch` (manual) | Post-workshop cleanup. Resets passwords + MFA, destroys user VMs (`user_count=0`). Requires `CLEANUP` confirmation. |
+| 3b | `3 - Cleanup Workshop` | `workflow_dispatch` (manual) | Full post-workshop cleanup: deletes ADBs, resets passwords + MFA, destroys user VMs, cleans up OCI networking. Requires `CLEANUP` confirmation. |
 | 4 | `4 - Terraform Import` | `workflow_dispatch` (manual) | Imports existing Azure resources into Terraform remote state. Supports `shared` or `users` project. Dry-run mode available. |
 
 ### Workflow Execution Order
