@@ -450,23 +450,139 @@ jobs:
             echo "test_passed=true" >> $GITHUB_OUTPUT
           fi
 
+      - name: Run connping against ADB
+        id: connping
+        run: |
+          echo "🔌 Running connping to ADB endpoint..."
+          ADB_IP="${{ needs.setup-adb.outputs.adb_ip }}"
+          RESULT=$(az vm run-command invoke \
+            --resource-group "${{ needs.deploy-test-runner.outputs.rg_name }}" \
+            --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
+            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
+            --command-id RunShellScript \
+            --scripts "source /etc/profile.d/oracle-workshop.sh 2>/dev/null; connping ${ADB_IP} 1522" \
+            -o json)
+          OUTPUT=$(echo "$RESULT" | jq -r '.value[0].message')
+          echo "$OUTPUT" | tee /tmp/connping-output.txt
+          if echo "$OUTPUT" | grep -qi "error\|fail\|refused"; then
+            echo "connping_passed=false" >> $GITHUB_OUTPUT
+          else
+            echo "connping_passed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run adbping against ADB
+        id: adbping
+        run: |
+          echo "🏓 Running adbping to ADB endpoint..."
+          ADB_IP="${{ needs.setup-adb.outputs.adb_ip }}"
+          RESULT=$(az vm run-command invoke \
+            --resource-group "${{ needs.deploy-test-runner.outputs.rg_name }}" \
+            --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
+            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
+            --command-id RunShellScript \
+            --scripts "source /etc/profile.d/oracle-workshop.sh 2>/dev/null; adbping ${ADB_IP} 1522" \
+            -o json)
+          OUTPUT=$(echo "$RESULT" | jq -r '.value[0].message')
+          echo "$OUTPUT" | tee /tmp/adbping-output.txt
+          if echo "$OUTPUT" | grep -qi "error\|fail\|refused"; then
+            echo "adbping_passed=false" >> $GITHUB_OUTPUT
+          else
+            echo "adbping_passed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Test Report
+        if: always()
+        run: |
+          mkdir -p /tmp/test-report
+
+          # Create a markdown test report
+          cat > /tmp/test-report/test-report.md << 'EOF'
+          # Workshop Test Report
+          EOF
+
+          cat >> /tmp/test-report/test-report.md << EOF
+
+          **Date:** $(date -u '+%Y-%m-%d %H:%M UTC')
+          **ADB:** $ADB_NAME
+          **Trigger:** ${{ github.event_name }}
+          **Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          ## BATS Challenge Tests
+
+          \`\`\`
+          $(cat /tmp/test-output.txt 2>/dev/null || echo "No output captured")
+          \`\`\`
+
+          ## connping Result
+
+          **Status:** $( [ "${{ steps.connping.outputs.connping_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" )
+
+          \`\`\`
+          $(cat /tmp/connping-output.txt 2>/dev/null || echo "No output captured")
+          \`\`\`
+
+          ## adbping Result
+
+          **Status:** $( [ "${{ steps.adbping.outputs.adbping_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" )
+
+          \`\`\`
+          $(cat /tmp/adbping-output.txt 2>/dev/null || echo "No output captured")
+          \`\`\`
+
+          ## Summary
+
+          | Test | Status |
+          |------|--------|
+          | BATS Challenges | $( [ "${{ steps.tests.outputs.test_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" ) |
+          | connping | $( [ "${{ steps.connping.outputs.connping_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" ) |
+          | adbping | $( [ "${{ steps.adbping.outputs.adbping_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" ) |
+          EOF
+
+          # Also save raw outputs
+          cp /tmp/test-output.txt /tmp/test-report/bats-output.txt 2>/dev/null || true
+          cp /tmp/connping-output.txt /tmp/test-report/connping-output.txt 2>/dev/null || true
+          cp /tmp/adbping-output.txt /tmp/test-report/adbping-output.txt 2>/dev/null || true
+
+      - name: Upload Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ github.run_id }}
+          path: /tmp/test-report/
+          retention-days: 90
+
       - name: Test Summary
         if: always()
         run: |
-          echo "## 🧪 Workshop Challenge Test Results (Standalone E2E)" >> $GITHUB_STEP_SUMMARY
+          echo "## 🧪 Workshop Challenge Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Trigger:** ${{ github.event_name }} | **ADB:** $ADB_NAME" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### BATS Tests" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/test-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No test output captured"
           echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Connectivity Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Tool | Status | Detail |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          CONNPING_STATUS=$( [ "${{ steps.connping.outputs.connping_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" )
+          ADBPING_STATUS=$( [ "${{ steps.adbping.outputs.adbping_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" )
+          echo "| connping | $CONNPING_STATUS | $(head -1 /tmp/connping-output.txt 2>/dev/null || echo 'n/a') |" >> $GITHUB_STEP_SUMMARY
+          echo "| adbping | $ADBPING_STATUS | $(head -1 /tmp/adbping-output.txt 2>/dev/null || echo 'n/a') |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ steps.tests.outputs.test_passed }}" = "false" ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
+          # Fail if any test failed
+          FAILED=false
+          [ "${{ steps.tests.outputs.test_passed }}" = "false" ] && FAILED=true
+          [ "${{ steps.connping.outputs.connping_passed }}" = "false" ] && FAILED=true
+          [ "${{ steps.adbping.outputs.adbping_passed }}" = "false" ] && FAILED=true
+
+          if [ "$FAILED" = "true" ]; then
             echo "❌ **Some tests failed!** Review output above." >> $GITHUB_STEP_SUMMARY
             exit 1
           else
-            echo "" >> $GITHUB_STEP_SUMMARY
             echo "✅ **All tests passed.**" >> $GITHUB_STEP_SUMMARY
           fi
 
