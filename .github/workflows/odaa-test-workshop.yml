@@ -245,7 +245,7 @@ jobs:
             --no-wait
 
           echo "⏳ Waiting for ADB provisioning..."
-          for i in $(seq 1 90); do
+          for i in $(seq 1 120); do
             STATE=$(az rest --method GET \
               --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
               --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Pending")
@@ -256,9 +256,14 @@ jobs:
               echo "❌ ADB provisioning failed"
               exit 1
             fi
-            echo "  Provisioning ($STATE)... $i/90"
+            echo "  Provisioning ($STATE)... $i/120"
             sleep 20
           done
+
+          if [[ "$STATE" != "Succeeded" ]]; then
+            echo "❌ ADB provisioning timed out after 40 minutes (state: $STATE)"
+            exit 1
+          fi
 
       - name: Get ADB outputs
         id: adb
