@@ -163,6 +163,7 @@ jobs:
     outputs:
       adb_ip: ${{ steps.adb.outputs.adb_ip }}
       adb_label: ${{ steps.adb.outputs.adb_label }}
+      adb_conn_high: ${{ steps.adb.outputs.adb_conn_high }}
       nsg_ocid: ${{ steps.nsg.outputs.nsg_ocid }}
 
     steps:
@@ -272,8 +273,15 @@ jobs:
             --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01")
           ADB_IP=$(echo "$RESPONSE" | jq -r '.properties.privateEndpointIp')
           ADB_LABEL=$(echo "$RESPONSE" | jq -r '.properties.privateEndpointLabel')
+          # Extract HIGH connection profile TNS string for adbping
+          ADB_CONN_HIGH=$(echo "$RESPONSE" | jq -r '.properties.connectionStrings.profiles[] | select(.displayName=="HIGH") | .value // empty' 2>/dev/null || true)
+          if [ -z "$ADB_CONN_HIGH" ]; then
+            # Fallback: try connectionUrls
+            ADB_CONN_HIGH=$(echo "$RESPONSE" | jq -r '.properties.connectionUrls.high // empty' 2>/dev/null || true)
+          fi
           echo "adb_ip=$ADB_IP" >> $GITHUB_OUTPUT
           echo "adb_label=$ADB_LABEL" >> $GITHUB_OUTPUT
+          echo "adb_conn_high=$ADB_CONN_HIGH" >> $GITHUB_OUTPUT
           echo "✅ ADB deployed: IP=$ADB_IP, Label=$ADB_LABEL"
 
       - name: Setup OCI CLI
@@ -464,7 +472,7 @@ jobs:
             --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
             --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
             --command-id RunShellScript \
-            --scripts "source /etc/profile.d/oracle-workshop.sh 2>/dev/null; connping ${ADB_IP} 1522" \
+            --scripts "export PATH=/opt/oracle/rwloadsim/bin:/opt/oracle/instantclient:\$PATH; export LD_LIBRARY_PATH=/opt/oracle/instantclient:\$LD_LIBRARY_PATH; connping ${ADB_IP} 1522" \
             -o json)
           OUTPUT=$(echo "$RESULT" | jq -r '.value[0].message')
           echo "$OUTPUT" | tee /tmp/connping-output.txt
@@ -478,13 +486,19 @@ jobs:
         id: adbping
         run: |
           echo "🏓 Running adbping to ADB endpoint..."
-          ADB_IP="${{ needs.setup-adb.outputs.adb_ip }}"
+          ADB_CONN="${{ needs.setup-adb.outputs.adb_conn_high }}"
+          if [ -z "$ADB_CONN" ]; then
+            echo "⚠️ No connection string available, using IP-based fallback"
+            ADB_IP="${{ needs.setup-adb.outputs.adb_ip }}"
+            ADB_LABEL="${{ needs.setup-adb.outputs.adb_label }}"
+            ADB_CONN="(description=(retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1522)(host=${ADB_LABEL}.adb.eu-paris-1.oraclecloud.com))(connect_data=(service_name=${ADB_LABEL}_high.adb.oraclecloud.com))(security=(ssl_server_dn_match=no)))"
+          fi
           RESULT=$(az vm run-command invoke \
             --resource-group "${{ needs.deploy-test-runner.outputs.rg_name }}" \
             --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
             --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
             --command-id RunShellScript \
-            --scripts "source /etc/profile.d/oracle-workshop.sh 2>/dev/null; adbping ${ADB_IP} 1522" \
+            --scripts "export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64; adbping -u ADMIN -p '${{ secrets.ADB_ADMIN_PASSWORD }}' -s '${ADB_CONN}' -w /opt/oracle/adbping/rootwallet_for_onewaytls -i /opt/oracle/instantclient -j /usr/lib/jvm/java-17-openjdk-amd64" \
             -o json)
           OUTPUT=$(echo "$RESULT" | jq -r '.value[0].message')
           echo "$OUTPUT" | tee /tmp/adbping-output.txt

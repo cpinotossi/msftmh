@@ -121,13 +121,28 @@ download_or_die "https://github.com/oracle/rwloadsim/releases/download/v.${RWLOA
 echo ">>> Extracting rwloadsim..."
 tar -xzf /tmp/rwloadsim.tgz -C "${RWLOADSIM_DIR}" --strip-components=1
 
-# Create symlinks for connping/ociping
+# Create wrapper scripts for connping/ociping (symlinks break because
+# connping is a shell script that calls 'exec rwloadsim' without full path)
 if [ ! -x "${RWLOADSIM_DIR}/bin/connping" ]; then
     echo "ERROR: connping not found after rwloadsim extraction: ${RWLOADSIM_DIR}/bin/connping" >&2
     exit 13
 fi
-ln -sf "${RWLOADSIM_DIR}/bin/connping" /usr/local/bin/connping 2>/dev/null || true
-ln -sf "${RWLOADSIM_DIR}/bin/ociping" /usr/local/bin/ociping 2>/dev/null || true
+
+cat > /usr/local/bin/connping << WRAPPER
+#!/bin/bash
+export PATH="${RWLOADSIM_DIR}/bin:\$PATH"
+export LD_LIBRARY_PATH="${INSTANT_CLIENT_DIR}:\$LD_LIBRARY_PATH"
+exec ${RWLOADSIM_DIR}/bin/connping "\$@"
+WRAPPER
+chmod +x /usr/local/bin/connping
+
+cat > /usr/local/bin/ociping << WRAPPER
+#!/bin/bash
+export PATH="${RWLOADSIM_DIR}/bin:\$PATH"
+export LD_LIBRARY_PATH="${INSTANT_CLIENT_DIR}:\$LD_LIBRARY_PATH"
+exec ${RWLOADSIM_DIR}/bin/ociping "\$@"
+WRAPPER
+chmod +x /usr/local/bin/ociping
 echo ">>> rwloadsim installed"
 
 # ===============================================================================
