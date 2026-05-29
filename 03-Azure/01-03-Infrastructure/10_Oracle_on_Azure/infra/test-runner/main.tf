@@ -183,6 +183,14 @@ resource "azurerm_role_assignment" "reader_mhodaa" {
   principal_id         = azurerm_linux_virtual_machine.test.identity[0].principal_id
 }
 
+# Reader on sub-mhcore (test-runner RG, DNS zone)
+resource "azurerm_role_assignment" "reader_mhcore" {
+  provider             = azurerm.mhcore
+  scope                = "/subscriptions/${var.mhcore_subscription_id}"
+  role_definition_name = "Reader"
+  principal_id         = azurerm_linux_virtual_machine.test.identity[0].principal_id
+}
+
 # Contributor on rg-odaa-shared (ADB creation via Bicep, DNS management)
 resource "azurerm_role_assignment" "contributor_odaa_shared" {
   provider             = azurerm.mhodaa
