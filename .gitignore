@@ -205,3 +205,12 @@ id_rsa.pub
 *.parameters.json
 # OCI credentials (API keys, config with secrets)
 **/.oci/
+
+# Oracle on Azure specific ignores
+misc/
+**/mis/
+NOTES.md
+gghack.yaml
+ggfabric.yaml
+adbping-job.yaml
+connping-job.yaml
