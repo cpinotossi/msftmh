@@ -41,6 +41,7 @@ setup() {
 }
 
 @test "connping reaches ADB endpoint" {
+  command -v rwloadsim >/dev/null 2>&1 || skip "rwloadsim not in PATH (connping dependency)"
   local ip
   ip=$(az network private-dns record-set a list \
     --zone-name "$TEST_DNS_ZONE" \

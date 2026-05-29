@@ -9,7 +9,7 @@
 # - VM with System-Assigned Managed Identity (same Gallery image as user VMs)
 # - VNet Peering to shared ODAA VNet (ADB connectivity)
 # - Private DNS Zone + VNet link (test-owned, no user side effects)
-# - RBAC: Reader on sub-mh0 + sub-mhodaa, Contributor on rg-odaa-shared
+# - RBAC: Reader on sub-mh0 + sub-mhodaa + sub-mhcore, Custom Role on rg-odaa-shared
 # ===============================================================================
 
 locals {
@@ -191,12 +191,13 @@ resource "azurerm_role_assignment" "reader_mhcore" {
   principal_id         = azurerm_linux_virtual_machine.test.identity[0].principal_id
 }
 
-# Contributor on rg-odaa-shared (ADB creation via Bicep, DNS management)
-resource "azurerm_role_assignment" "contributor_odaa_shared" {
-  provider             = azurerm.mhodaa
-  scope                = "/subscriptions/${var.mhodaa_subscription_id}/resourceGroups/${local.shared.odaa_resource_group_name}"
-  role_definition_name = "Contributor"
-  principal_id         = azurerm_linux_virtual_machine.test.identity[0].principal_id
+# Custom role "Oracle Database Creator" on rg-odaa-shared — same as workshop users
+# ADB setup runs via GitHub OIDC SP (Contributor); VM MI only needs user-level access.
+resource "azurerm_role_assignment" "odaa_db_creator" {
+  provider           = azurerm.mhodaa
+  scope              = "/subscriptions/${var.mhodaa_subscription_id}/resourceGroups/${local.shared.odaa_resource_group_name}"
+  role_definition_id = local.shared.odaa_role_definition_resource_id
+  principal_id       = azurerm_linux_virtual_machine.test.identity[0].principal_id
 }
 
 # ===============================================================================
