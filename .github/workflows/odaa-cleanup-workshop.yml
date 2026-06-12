@@ -242,7 +242,7 @@ jobs:
             -backend-config="msi_endpoint=http://127.0.0.1:54321/msi/token" \
             -backend-config="subscription_id=${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
             -backend-config="tenant_id=$ARM_TENANT_ID"
-          terraform apply -auto-approve -var="user_count=0"
+          terraform destroy -auto-approve
 
       - name: Summary
         run: |
@@ -274,7 +274,14 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Install OCI CLI
-        run: pip install -q oci-cli
+        run: |
+          # Install pip if missing, then install oci-cli
+          python3 -m ensurepip --upgrade 2>/dev/null || \
+            (curl -sS https://bootstrap.pypa.io/get-pip.py | python3 - --user --quiet)
+          python3 -m pip install --user oci-cli --quiet
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          oci --version
 
       - name: Cleanup OCI VCNs and NSGs
         run: |

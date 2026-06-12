@@ -648,7 +648,7 @@ jobs:
           OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
         run: |
           echo "🗑️ Removing test-runner NSG rule..."
-          pip install -q oci-cli 2>/dev/null
+          command -v oci >/dev/null 2>&1 || python3 -m pip install --user oci-cli --quiet 2>/dev/null || true
           NSG_OCID="${{ needs.setup-adb.outputs.nsg_ocid }}"
           # Find and remove rules with source 10.200.0.0/24
           RULE_IDS=$(oci network nsg rules list \
