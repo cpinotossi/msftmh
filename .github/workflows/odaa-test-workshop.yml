@@ -9,9 +9,6 @@ name: 3 - Test Workshop
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["2 - Deploy Workshop"]
-    types: [completed]
 
 concurrency:
   group: workshop-tests
@@ -34,7 +31,6 @@ jobs:
   preflight:
     name: Preflight Checks
     runs-on: [self-hosted, azure, container-apps, terraform]
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     outputs:
       should_run: ${{ steps.decision.outputs.should_run }}
 
@@ -48,15 +44,6 @@ jobs:
       - name: Check skip conditions
         id: decision
         run: |
-          # Skip if triggered by workflow_run and commit contains [skip-tests]
-          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            COMMIT_MSG=$(git log -1 --format=%B "${{ github.event.workflow_run.head_sha }}" 2>/dev/null || echo "")
-            if [[ "$COMMIT_MSG" == *"[skip-tests]"* ]]; then
-              echo "should_run=false" >> $GITHUB_OUTPUT
-              echo "⏭️ Skipping: commit message contains [skip-tests]"
-              exit 0
-            fi
-          fi
           echo "should_run=true" >> $GITHUB_OUTPUT
           echo "✅ Tests will run"
 
