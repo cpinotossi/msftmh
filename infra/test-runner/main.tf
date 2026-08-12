@@ -4,12 +4,16 @@
 # Deploys an isolated test VM that validates workshop challenges automatically.
 # Always deployed — independent of user_count. Uses Managed Identity for auth.
 #
+# The RG (rg-test-runner) is owned by infra/github-runner — referenced here as
+# a data source. This allows the github-runner MSI to have Contributor at RG
+# scope only (no subscription-level Contributor on sub-mhcore).
+#
 # Resources:
-# - RG, VNet, Subnet, NSG in sub-mhcore
+# - VNet, Subnet, NSG in rg-test-runner (sub-mhcore)
 # - VM with System-Assigned Managed Identity (same Gallery image as user VMs)
 # - VNet Peering to shared ODAA VNet (ADB connectivity)
 # - Private DNS Zone + VNet link (test-owned, no user side effects)
-# - RBAC: Reader on sub-mh0 + sub-mhodaa + sub-mhcore, Custom Role on rg-odaa-shared
+# - RBAC: Reader on sub-mh0 + sub-mhodaa + rg-test-runner, Custom Role on rg-odaa-shared
 # ===============================================================================
 
 locals {
@@ -37,11 +41,9 @@ data "terraform_remote_state" "shared" {
 # Resource Group
 # ===============================================================================
 
-resource "azurerm_resource_group" "test" {
+data "azurerm_resource_group" "test" {
   provider = azurerm.mhcore
   name     = "rg-test-runner"
-  location = var.location
-  tags     = var.tags
 }
 
 # ===============================================================================
@@ -52,7 +54,7 @@ resource "azurerm_network_security_group" "test" {
   provider            = azurerm.mhcore
   name                = "nsg-test-runner"
   location            = var.location
-  resource_group_name = azurerm_resource_group.test.name
+  resource_group_name = data.azurerm_resource_group.test.name
   tags                = var.tags
 }
 
@@ -60,7 +62,7 @@ resource "azurerm_virtual_network" "test" {
   provider            = azurerm.mhcore
   name                = "vnet-test-runner"
   location            = var.location
-  resource_group_name = azurerm_resource_group.test.name
+  resource_group_name = data.azurerm_resource_group.test.name
   address_space       = [local.vm_cidr]
   tags                = var.tags
 }
@@ -68,7 +70,7 @@ resource "azurerm_virtual_network" "test" {
 resource "azurerm_subnet" "test" {
   provider             = azurerm.mhcore
   name                 = "snet-test-runner"
-  resource_group_name  = azurerm_resource_group.test.name
+  resource_group_name  = data.azurerm_resource_group.test.name
   virtual_network_name = azurerm_virtual_network.test.name
   address_prefixes     = [local.vm_cidr]
 }
@@ -96,7 +98,7 @@ resource "azurerm_network_interface" "test" {
   provider            = azurerm.mhcore
   name                = "nic-test-runner"
   location            = var.location
-  resource_group_name = azurerm_resource_group.test.name
+  resource_group_name = data.azurerm_resource_group.test.name
   tags                = var.tags
 
   ip_configuration {
@@ -114,7 +116,7 @@ resource "azurerm_linux_virtual_machine" "test" {
   provider            = azurerm.mhcore
   name                = "vm-test-runner"
   location            = var.location
-  resource_group_name = azurerm_resource_group.test.name
+  resource_group_name = data.azurerm_resource_group.test.name
   size                = var.vm_size
   admin_username      = var.admin_username
   tags                = var.tags
@@ -148,7 +150,7 @@ resource "azurerm_linux_virtual_machine" "test" {
 resource "azurerm_virtual_network_peering" "test_to_odaa" {
   provider                  = azurerm.mhcore
   name                      = "peer-test-runner-to-odaa"
-  resource_group_name       = azurerm_resource_group.test.name
+  resource_group_name       = data.azurerm_resource_group.test.name
   virtual_network_name      = azurerm_virtual_network.test.name
   remote_virtual_network_id = local.shared.odaa_vnet_id
   allow_forwarded_traffic   = true
@@ -183,10 +185,10 @@ resource "azurerm_role_assignment" "reader_mhodaa" {
   principal_id         = azurerm_linux_virtual_machine.test.identity[0].principal_id
 }
 
-# Reader on sub-mhcore (test-runner RG, DNS zone)
+# Reader on rg-test-runner (own RG, DNS zone — no subscription scope)
 resource "azurerm_role_assignment" "reader_mhcore" {
   provider             = azurerm.mhcore
-  scope                = "/subscriptions/${var.mhcore_subscription_id}"
+  scope                = data.azurerm_resource_group.test.id
   role_definition_name = "Reader"
   principal_id         = azurerm_linux_virtual_machine.test.identity[0].principal_id
 }
@@ -207,14 +209,14 @@ resource "azurerm_role_assignment" "odaa_db_creator" {
 resource "azurerm_private_dns_zone" "test" {
   provider            = azurerm.mhcore
   name                = "adb.eu-paris-1.oraclecloud.com"
-  resource_group_name = azurerm_resource_group.test.name
+  resource_group_name = data.azurerm_resource_group.test.name
   tags                = var.tags
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "test" {
   provider              = azurerm.mhcore
   name                  = "link-test-runner"
-  resource_group_name   = azurerm_resource_group.test.name
+  resource_group_name   = data.azurerm_resource_group.test.name
   private_dns_zone_name = azurerm_private_dns_zone.test.name
   virtual_network_id    = azurerm_virtual_network.test.id
   registration_enabled  = false
@@ -226,11 +228,6 @@ resource "azurerm_private_dns_zone_virtual_network_link" "test" {
 # These moved blocks handle the one-time migration from count-based resources
 # to always-deployed resources. Safe to remove after first successful apply.
 # ===============================================================================
-
-moved {
-  from = azurerm_resource_group.test[0]
-  to   = azurerm_resource_group.test
-}
 
 moved {
   from = azurerm_network_security_group.test[0]

@@ -14,7 +14,7 @@ output "vm_name" {
 
 output "resource_group_name" {
   description = "Resource group of the test runner"
-  value       = azurerm_resource_group.test.name
+  value       = data.azurerm_resource_group.test.name
 }
 
 output "managed_identity_principal_id" {
@@ -39,5 +39,5 @@ output "dns_zone_name" {
 
 output "dns_zone_rg" {
   description = "Resource group containing the test DNS zone"
-  value       = azurerm_resource_group.test.name
+  value       = data.azurerm_resource_group.test.name
 }
