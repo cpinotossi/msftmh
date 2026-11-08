@@ -33,11 +33,15 @@ output "vnet_id" {
 }
 
 output "dns_zone_name" {
-  description = "Private DNS zone name managed by test runner"
-  value       = azurerm_private_dns_zone.test.name
+  description = "Centrally managed private DNS zone"
+  value       = local.shared.central_dns_zone_name
 }
 
 output "dns_zone_rg" {
   description = "Resource group containing the test DNS zone"
-  value       = data.azurerm_resource_group.test.name
+  value       = local.shared.central_dns_zone_resource_group_name
+}
+
+output "odaa_resource_group_name" {
+  value = azurerm_resource_group.odaa_test.name
 }

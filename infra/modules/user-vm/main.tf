@@ -10,8 +10,8 @@
 # ===============================================================================
 
 locals {
-  user_suffix = format("%02d", var.user_index)
-  name_prefix = "user${local.user_suffix}"
+  user_suffix         = format("%02d", var.user_index)
+  name_prefix         = "mhuser${var.user_index}"
   vm_subnet_cidr      = cidrsubnet(var.vnet_cidr, 1, 0)
   bastion_subnet_cidr = cidrsubnet(var.vnet_cidr, 2, 2)
 }
@@ -35,6 +35,7 @@ resource "azurerm_virtual_network" "vm" {
   location            = azurerm_resource_group.vm.location
   resource_group_name = azurerm_resource_group.vm.name
   address_space       = [var.vnet_cidr]
+  dns_servers         = [var.firewall_private_ip]
   tags                = var.tags
 }
 
@@ -107,9 +108,94 @@ resource "azurerm_network_security_group" "vm" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "22"
+    source_address_prefix      = var.hub_bastion_subnet_cidr
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "DenyOtherClientsInbound"
+    priority                   = 1100
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefixes    = ["10.0.0.0/16", "10.200.0.0/24"]
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "AllowFirewallDNS"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "53"
+    source_address_prefix      = "*"
+    destination_address_prefix = var.firewall_private_ip
+  }
+
+  security_rule {
+    name                       = "DenyOtherDNS"
+    priority                   = 110
+    direction                  = "Outbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "53"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+
+  security_rule {
+    name                       = "DenyAzurePlatformDNS"
+    priority                   = 120
+    direction                  = "Outbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "53"
+    source_address_prefix      = "*"
+    destination_address_prefix = "AzurePlatformDNS"
+  }
+
+  security_rule {
+    name                         = "DenyOtherClientsOutbound"
+    priority                     = 200
+    direction                    = "Outbound"
+    access                       = "Deny"
+    protocol                     = "*"
+    source_port_range            = "*"
+    destination_port_range       = "*"
+    source_address_prefix        = "*"
+    destination_address_prefixes = ["10.0.0.0/16", "10.200.0.0/24"]
+  }
+}
+
+resource "azurerm_route_table" "vm" {
+  name                = "rt-${local.name_prefix}"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.vm.name
+  tags                = var.tags
+
+  route {
+    name                   = "oracle-via-hub"
+    address_prefix         = var.odaa_subnet_cidr
+    next_hop_type          = "VirtualAppliance"
+    next_hop_in_ip_address = var.firewall_private_ip
+  }
+  route {
+    name                   = "internet-via-hub"
+    address_prefix         = "0.0.0.0/0"
+    next_hop_type          = "VirtualAppliance"
+    next_hop_in_ip_address = var.firewall_private_ip
+  }
+}
+
+resource "azurerm_subnet_route_table_association" "vm" {
+  subnet_id      = azurerm_subnet.vm.id
+  route_table_id = azurerm_route_table.vm.id
 }
 
 resource "azurerm_subnet_network_security_group_association" "vm" {
@@ -183,6 +269,7 @@ resource "azurerm_network_interface" "vm" {
     azurerm_subnet.vm,
     azurerm_public_ip.vm,
     azurerm_subnet_network_security_group_association.vm,
+    azurerm_subnet_route_table_association.vm,
   ]
 }
 
@@ -265,6 +352,14 @@ resource "azurerm_role_assignment" "vm_rg_reader" {
   role_definition_name = "Reader"
   principal_id         = var.entra_id_user_object_id
   description          = "Allows Entra ID user to see RG ${azurerm_resource_group.vm.name} in the portal"
+}
+
+resource "azurerm_role_assignment" "vm_rg_contributor" {
+  count                = var.entra_id_user_object_id != null ? 1 : 0
+  scope                = azurerm_resource_group.vm.id
+  role_definition_name = "Contributor"
+  principal_id         = var.entra_id_user_object_id
+  description          = "Manage only this user's VM spoke; no role assignment permissions"
 }
 
 resource "azurerm_role_assignment" "dns_zone_contributor" {

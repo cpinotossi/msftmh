@@ -11,7 +11,7 @@
 # Resources:
 # - VNet, Subnet, NSG in rg-test-runner (sub-mhcore)
 # - VM with System-Assigned Managed Identity (same Gallery image as user VMs)
-# - VNet Peering to shared ODAA VNet (ADB connectivity)
+# - VNet Peering to shared ODAA VNet (Base Database connectivity)
 # - Private DNS Zone + VNet link (test-owned, no user side effects)
 # - RBAC: Reader on sub-mh0 + sub-mhodaa + rg-test-runner, Custom Role on rg-odaa-shared
 # ===============================================================================
@@ -32,8 +32,10 @@ data "terraform_remote_state" "shared" {
     container_name       = var.tf_state_container
     key                  = "shared.tfstate"
     resource_group_name  = var.tf_state_rg
-    use_msi              = true
     use_azuread_auth     = true
+    subscription_id     = var.mhcore_subscription_id
+    tenant_id           = var.tenant_id
+    use_msi             = var.use_msi
   }
 }
 
@@ -64,6 +66,7 @@ resource "azurerm_virtual_network" "test" {
   location            = var.location
   resource_group_name = data.azurerm_resource_group.test.name
   address_space       = [local.vm_cidr]
+  dns_servers         = [local.shared.firewall_private_ip]
   tags                = var.tags
 }
 
@@ -73,6 +76,7 @@ resource "azurerm_subnet" "test" {
   resource_group_name  = data.azurerm_resource_group.test.name
   virtual_network_name = azurerm_virtual_network.test.name
   address_prefixes     = [local.vm_cidr]
+  default_outbound_access_enabled = false
 }
 
 resource "azurerm_subnet_network_security_group_association" "test" {
@@ -147,22 +151,48 @@ resource "azurerm_linux_virtual_machine" "test" {
 # VNet Peering — Test Runner <-> Shared ODAA VNet
 # ===============================================================================
 
-resource "azurerm_virtual_network_peering" "test_to_odaa" {
+resource "azurerm_virtual_network_peering" "test_to_hub" {
   provider                  = azurerm.mhcore
-  name                      = "peer-test-runner-to-odaa"
+  name                      = "peer-test-runner-to-hub"
   resource_group_name       = data.azurerm_resource_group.test.name
   virtual_network_name      = azurerm_virtual_network.test.name
-  remote_virtual_network_id = local.shared.odaa_vnet_id
+  remote_virtual_network_id = local.shared.hub_vnet_id
   allow_forwarded_traffic   = true
 }
 
-resource "azurerm_virtual_network_peering" "odaa_to_test" {
-  provider                  = azurerm.mhodaa
-  name                      = "peer-odaa-to-test-runner"
-  resource_group_name       = local.shared.odaa_resource_group_name
-  virtual_network_name      = local.shared.odaa_vnet_name
+resource "azurerm_virtual_network_peering" "hub_to_test" {
+  provider                  = azurerm.mhcore
+  name                      = "peer-hub-to-test-runner"
+  resource_group_name       = local.shared.hub_resource_group_name
+  virtual_network_name      = local.shared.hub_vnet_name
   remote_virtual_network_id = azurerm_virtual_network.test.id
   allow_forwarded_traffic   = true
+}
+
+resource "azurerm_route_table" "test" {
+  provider            = azurerm.mhcore
+  name                = "rt-test-runner"
+  location            = var.location
+  resource_group_name = data.azurerm_resource_group.test.name
+  route {
+    name                   = "oracle-via-hub"
+    address_prefix         = local.shared.odaa_subnet_cidr
+    next_hop_type          = "VirtualAppliance"
+    next_hop_in_ip_address = local.shared.firewall_private_ip
+  }
+  route {
+    name                   = "internet-via-hub"
+    address_prefix         = "0.0.0.0/0"
+    next_hop_type          = "VirtualAppliance"
+    next_hop_in_ip_address = local.shared.firewall_private_ip
+  }
+  tags = var.tags
+}
+
+resource "azurerm_subnet_route_table_association" "test" {
+  provider       = azurerm.mhcore
+  subnet_id      = azurerm_subnet.test.id
+  route_table_id = azurerm_route_table.test.id
 }
 
 # ===============================================================================
@@ -194,10 +224,10 @@ resource "azurerm_role_assignment" "reader_mhcore" {
 }
 
 # Custom role "Oracle Database Creator" on rg-odaa-shared — same as workshop users
-# ADB setup runs via GitHub OIDC SP (Contributor); VM MI only needs user-level access.
+# Database setup runs via the workflow runner; VM MI needs user-level access.
 resource "azurerm_role_assignment" "odaa_db_creator" {
   provider           = azurerm.mhodaa
-  scope              = "/subscriptions/${var.mhodaa_subscription_id}/resourceGroups/${local.shared.odaa_resource_group_name}"
+  scope              = azurerm_resource_group.odaa_test.id
   role_definition_id = local.shared.odaa_role_definition_resource_id
   principal_id       = azurerm_linux_virtual_machine.test.identity[0].principal_id
 }
@@ -206,21 +236,11 @@ resource "azurerm_role_assignment" "odaa_db_creator" {
 # Private DNS Zone (test-owned, isolated from user resources)
 # ===============================================================================
 
-resource "azurerm_private_dns_zone" "test" {
-  provider            = azurerm.mhcore
-  name                = "adb.eu-paris-1.oraclecloud.com"
-  resource_group_name = data.azurerm_resource_group.test.name
-  tags                = var.tags
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "test" {
-  provider              = azurerm.mhcore
-  name                  = "link-test-runner"
-  resource_group_name   = data.azurerm_resource_group.test.name
-  private_dns_zone_name = azurerm_private_dns_zone.test.name
-  virtual_network_id    = azurerm_virtual_network.test.id
-  registration_enabled  = false
-  tags                  = var.tags
+resource "azurerm_resource_group" "odaa_test" {
+  provider = azurerm.mhodaa
+  name     = "rg-odaa-test"
+  location = var.location
+  tags     = var.tags
 }
 
 # ===============================================================================
@@ -262,16 +282,6 @@ moved {
 moved {
   from = azurerm_linux_virtual_machine.test[0]
   to   = azurerm_linux_virtual_machine.test
-}
-
-moved {
-  from = azurerm_virtual_network_peering.test_to_odaa[0]
-  to   = azurerm_virtual_network_peering.test_to_odaa
-}
-
-moved {
-  from = azurerm_virtual_network_peering.odaa_to_test[0]
-  to   = azurerm_virtual_network_peering.odaa_to_test
 }
 
 moved {

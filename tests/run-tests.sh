@@ -1,44 +1,22 @@
 #!/usr/bin/env bash
-# Run all BATS challenge tests (standalone — no user VM dependency)
-# Env: TEST_MH0_SUB, TEST_MHODAA_SUB, TEST_MHCORE_SUB, TEST_ADB_NAME (set by pipeline)
 set -euo pipefail
-
-# Load Oracle environment (rwloadsim, instant client, etc.)
-# Needed because az vm run-command uses non-login shell (no /etc/profile.d/)
-source /etc/profile.d/oracle-workshop.sh 2>/dev/null || true
-
-export TEST_DNS_RG="${TEST_DNS_RG:-rg-test-runner}"
-export TEST_DNS_SUB="${TEST_DNS_SUB:-$TEST_MHCORE_SUB}"
-export TEST_TR_RG="${TEST_TR_RG:-rg-test-runner}"
-export TEST_TR_VNET="${TEST_TR_VNET:-vnet-test-runner}"
-export TEST_ADB_NAME="${TEST_ADB_NAME:-adbtest00}"
-
-echo "============================================"
-echo "Workshop Challenge Tests (Standalone E2E)"
-echo "============================================"
-echo "MHCORE Sub: $TEST_MHCORE_SUB"
-echo "MH0 Sub:    $TEST_MH0_SUB"
-echo "MHODAA Sub: $TEST_MHODAA_SUB"
-echo "ADB Name:   $TEST_ADB_NAME"
-echo "DNS RG:     $TEST_DNS_RG"
-echo "============================================"
-echo ""
-
-# Wait for BATS to be available
-for i in $(seq 1 30); do
-  command -v bats &>/dev/null && break
-  echo "Waiting for BATS installation... ($i/30)"
-  sleep 10
+for name in TEST_MHODAA_SUB TEST_MHCORE_SUB TEST_DB_ID TEST_DB_SHAPE \
+  TEST_DB_VERSION TEST_DB_COMPUTE_MODEL TEST_DB_COMPUTE TEST_DB_STORAGE \
+  TEST_NETWORK_ANCHOR_ID TEST_RESOURCE_ANCHOR_ID TEST_DB_IP \
+  TEST_ODAA_RG TEST_ODAA_VNET TEST_TR_RG TEST_TR_VNET TEST_HUB_VNET_ID \
+  TEST_FIREWALL_PRIVATE_IP TEST_HUB_RESOLVER_INBOUND_IP \
+  TEST_ORACLE_DNS_DOMAIN TEST_ORACLE_DNS_LISTENING_IP TEST_ORACLE_DNS_FORWARDING_IP \
+  TEST_CENTRAL_DNS_ZONE_NAME TEST_ODAA_DELEGATED_CIDR \
+  TEST_DB_PORT TEST_DB_SERVICE TEST_DB_PDB TEST_DB_HOST; do
+  [[ -n "$(printenv "$name")" ]] || { echo "Missing required test configuration: $name" >&2; exit 1; }
 done
-
-if ! command -v bats &>/dev/null; then
-  echo "ERROR: BATS not available after 5 minutes"
+command -v bats >/dev/null
+command -v dig >/dev/null
+python3 -c 'import oracledb' >/dev/null
+[[ -r /etc/oracle-workshop/base-db-test.json ]] || {
+  echo 'Missing securely provisioned SQL credentials: /etc/oracle-workshop/base-db-test.json' >&2
   exit 1
-fi
-
-# Login with managed identity
-az login --identity --allow-no-subscriptions >/dev/null 2>&1
-
-# Run tests
-cd /opt/tests
+}
+az login --identity --allow-no-subscriptions >/dev/null
+cd "$(dirname "$0")"
 bats --tap challenge-*.bats

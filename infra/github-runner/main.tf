@@ -35,15 +35,30 @@ resource "azurerm_user_assigned_identity" "runner" {
 # RBAC Assignments - Grant Managed Identity permissions across subscriptions
 # ===============================================================================
 
-# Contributor on sub-mhcore (Compute Gallery)
-resource "azurerm_role_assignment" "mhcore_contributor" {
-  scope                = "/subscriptions/${var.sub_mhcore_id}"
+# ===============================================================================
+# Test Runner Resource Group (owned by github-runner, managed here for RBAC)
+# ===============================================================================
+# The test-runner RG is created here so we can grant the MSI Contributor at
+# RG scope only — no subscription-level Contributor needed on sub-mhcore.
+# The test-runner Terraform references this RG as a data source.
+# ===============================================================================
+
+resource "azurerm_resource_group" "test_runner" {
+  name     = "rg-test-runner"
+  location = var.location
+  tags     = var.tags
+}
+
+# Contributor on rg-test-runner (manages test VM, VNet, DNS, peering)
+resource "azurerm_role_assignment" "test_runner_contributor" {
+  scope                = azurerm_resource_group.test_runner.id
   role_definition_name = "Contributor"
   principal_id         = azurerm_user_assigned_identity.runner.principal_id
 }
 
-resource "azurerm_role_assignment" "mhcore_uaa" {
-  scope                = "/subscriptions/${var.sub_mhcore_id}"
+# User Access Administrator on rg-test-runner (creates RBAC for test VM MSI)
+resource "azurerm_role_assignment" "test_runner_uaa" {
+  scope                = azurerm_resource_group.test_runner.id
   role_definition_name = "User Access Administrator"
   principal_id         = azurerm_user_assigned_identity.runner.principal_id
 }

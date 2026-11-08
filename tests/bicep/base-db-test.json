@@ -1,0 +1,105 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.48.1.52935",
+      "templateHash": "451703307491185084"
+    }
+  },
+  "parameters": {
+    "shape": {
+      "type": "string",
+      "metadata": {
+        "description": "Exact shape returned by France Central metadata. No runtime fallback."
+      }
+    },
+    "dbVersion": {
+      "type": "string",
+      "metadata": {
+        "description": "Exact version returned by dbSystemDbVersions; prefer regional 26ai."
+      }
+    },
+    "zone": {
+      "type": "string"
+    },
+    "computeModel": {
+      "type": "string",
+      "allowedValues": [
+        "ECPU",
+        "OCPU"
+      ]
+    },
+    "computeCount": {
+      "type": "int"
+    },
+    "storageSizeGb": {
+      "type": "int",
+      "minValue": 256
+    },
+    "sshPublicKey": {
+      "type": "string"
+    },
+    "adminPassword": {
+      "type": "securestring"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "resourceAnchorId": {
+      "type": "string",
+      "metadata": {
+        "description": "Organizer-managed existing central resource anchor ARM ID."
+      }
+    },
+    "networkAnchorId": {
+      "type": "string",
+      "metadata": {
+        "description": "Organizer-managed existing central network anchor ARM ID for the selected zone."
+      }
+    }
+  },
+  "variables": {
+    "ownership": {
+      "workshop": "odaa",
+      "managed-by": "workshop-base-db",
+      "automation-owner": "[parameters('owner')]"
+    }
+  },
+  "resources": [
+    {
+      "type": "Oracle.Database/dbSystems",
+      "apiVersion": "2025-09-01",
+      "name": "basetest00",
+      "location": "francecentral",
+      "zones": [
+        "[parameters('zone')]"
+      ],
+      "tags": "[variables('ownership')]",
+      "properties": {
+        "source": "None",
+        "resourceAnchorId": "[parameters('resourceAnchorId')]",
+        "networkAnchorId": "[parameters('networkAnchorId')]",
+        "hostname": "basetest00",
+        "displayName": "basetest00",
+        "shape": "[parameters('shape')]",
+        "dbVersion": "[parameters('dbVersion')]",
+        "databaseEdition": "EnterpriseEdition",
+        "licenseModel": "LicenseIncluded",
+        "nodeCount": 1,
+        "computeModel": "[parameters('computeModel')]",
+        "computeCount": "[parameters('computeCount')]",
+        "initialDataStorageSizeInGb": "[parameters('storageSizeGb')]",
+        "dbSystemOptions": {
+          "storageManagement": "LVM"
+        },
+        "pdbName": "WORKSHOP",
+        "sshPublicKeys": [
+          "[parameters('sshPublicKey')]"
+        ],
+        "adminPassword": "[parameters('adminPassword')]"
+      }
+    }
+  ]
+}

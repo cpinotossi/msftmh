@@ -1,0 +1,68 @@
+name: 04 - Deploy Oracle Network
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: workshop-stage-04-oracle-network
+  cancel-in-progress: false
+
+jobs:
+  oracle:
+    uses: ./.github/workflows/odaa-require-oracle-subscription.yml
+  identity:
+    uses: ./.github/workflows/odaa-read-identity.yml
+  network:
+    needs: [oracle, identity]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Static Oracle Network Configuration
+        run: |
+          az bicep build-params --file infra/deployments/04-oracle-network.bicepparam \
+            --outfile "$RUNNER_TEMP/oracle-network.parameters.json"
+          python3 -c '
+          import ipaddress, json, os
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "oracle-network.parameters.json")) as source:
+              parameters = json.load(source)["parameters"]
+          address = ipaddress.ip_address(parameters["firewallPrivateIp"]["value"])
+          if address.version != 4 or not address.is_private:
+              raise SystemExit("Fill the actual hub firewall private IPv4 address in static 04-oracle-network.bicepparam")
+          '
+      - name: Map Seven Directory IDs
+        id: participants
+        env:
+          IDENTITY_OBJECT_IDS: ${{ needs.identity.outputs.user_object_ids }}
+        run: |
+          python3 -c '
+          import json, os
+          identity = json.loads(os.environ["IDENTITY_OBJECT_IDS"])
+          names = {"01":"mhuser1", "02":"mhuser2", "03":"mhuser3", "04":"mhuser4",
+                   "05":"mhuser5", "06":"mhuser6", "07":"mhuser7"}
+          if set(identity) != set(names):
+              raise SystemExit("Exactly seven verified directory IDs are required")
+          users = {names[key]: identity[key] for key in names}
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("user_object_ids=" + json.dumps(users, separators=(",", ":")) + "\n")
+          '
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: '8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5'
+          subscription-id: '4ce5b5cc-e869-451f-98fc-f50448849ee0'
+      - name: Deploy Oracle Network Only
+        env:
+          GROUP_ID: ${{ needs.identity.outputs.group_id }}
+          USER_OBJECT_IDS: ${{ steps.participants.outputs.user_object_ids }}
+        run: |
+          test -n "$GROUP_ID"
+          az deployment sub create --name workshop-04-oracle-network --location francecentral \
+            --subscription 4ce5b5cc-e869-451f-98fc-f50448849ee0 \
+            --template-file infra/deployments/04-oracle-network.bicep \
+            --parameters @"$RUNNER_TEMP/oracle-network.parameters.json" \
+              workshopGroupId="$GROUP_ID" userObjectIds="$USER_OBJECT_IDS" \
+            --output none

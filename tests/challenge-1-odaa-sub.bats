@@ -20,15 +20,8 @@ setup() {
   assert_output "$TEST_ODAA_VNET"
 }
 
-@test "Test-runner VNet peering to ODAA is connected" {
-  run az network vnet peering list \
-    --vnet-name "$TEST_TR_VNET" \
-    --resource-group "$TEST_TR_RG" \
-    --subscription "$TEST_MHCORE_SUB" \
-    -o tsv --query "[?contains(name,'odaa')].peeringState"
+@test "Test-runner uses hub-only peering exact Oracle UDR and firewall DNS proxy" {
+  run python3 /opt/tests/network_probe.py --topology
   assert_success
-  refute_output ''
-  while IFS= read -r line; do
-    [[ "$line" == "Connected" ]]
-  done <<< "$output"
+  assert_output 'HUB_TOPOLOGY_OK'
 }

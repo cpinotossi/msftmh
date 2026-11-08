@@ -1,0 +1,41 @@
+name: 02 - Deploy Hub
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: workshop-stage-02-hub
+  cancel-in-progress: false
+
+env:
+  ARM_TENANT_ID: '8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5'
+  WORKSHOP_SUBSCRIPTION_ID: 'aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483'
+
+jobs:
+  hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          subscription-id: ${{ env.WORKSHOP_SUBSCRIPTION_ID }}
+      - name: Compile Static Hub Configuration
+        run: |
+          az bicep build-params --file infra/deployments/02-hub.bicepparam \
+            --outfile "$RUNNER_TEMP/hub.parameters.json"
+      - name: Deploy Hub Only
+        run: |
+          az group create --name rg-workshop-hub --location francecentral \
+            --subscription "$WORKSHOP_SUBSCRIPTION_ID" --output none
+          az deployment group create --name workshop-02-hub \
+            --resource-group rg-workshop-hub \
+            --subscription "$WORKSHOP_SUBSCRIPTION_ID" \
+            --template-file infra/deployments/02-hub.bicep \
+            --parameters @"$RUNNER_TEMP/hub.parameters.json" \
+            --output none

@@ -1,703 +1,219 @@
-# ===============================================================================
-# End-to-End Workshop Challenge Tests (Standalone)
-# - Creates ADB via Bicep, NSG via OCI CLI, DNS A-record via az CLI
-# - Runs all BATS tests on test-runner VM (same image as user VMs)
-# - Cleans up ADB after tests complete
-# - Works independently of user_count (no user VM dependency)
-# ===============================================================================
-name: 3 - Test Workshop
+name: Test BaseDB - Phase B only
 
 on:
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type RUN_PHASE_B_BASEDB_TEST after organizer approval of stages 04 through 07'
+        type: string
+        required: true
+      participant:
+        description: 'One existing participant VM; the test also creates a temporary hub DNS diagnostic VM'
+        type: choice
+        options: ['01', '02', '03', '04', '05', '06', '07']
+        default: '01'
+        required: true
+      db_shape:
+        description: 'Exact regional Single Node shape'
+        type: string
+        required: true
+      db_version:
+        description: 'Exact regional database version; no fallback'
+        type: string
+        required: true
+      availability_zone:
+        description: 'Must match the existing central network anchor zone'
+        type: string
+        required: true
+      compute_model:
+        type: choice
+        options: [ECPU, OCPU]
+        required: true
+      compute_count:
+        type: number
+        required: true
+      storage_gb:
+        type: number
+        default: 256
+        required: true
 
 concurrency:
-  group: workshop-tests
+  group: workshop-basedb-test
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  id-token: write
+
 env:
-  TF_DIR: 'infra/test-runner'
-  TESTS_DIR: 'tests'
-  TF_VERSION: '1.13.4'
-  TF_VAR_tenant_id: ${{ vars.TF_TENANT_ID }}
-  TF_VAR_mhcore_subscription_id: ${{ vars.TF_STATE_SUBSCRIPTION_ID }}
-  TF_VAR_mh0_subscription_id: ${{ vars.TF_MH0_SUBSCRIPTION_ID }}
-  TF_VAR_mhodaa_subscription_id: ${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}
-  TF_VAR_tf_state_storage: ${{ vars.TF_STATE_STORAGE }}
-  TF_VAR_tf_state_rg: ${{ vars.TF_STATE_RG }}
-  TF_VAR_tf_state_container: ${{ vars.TF_STATE_CONTAINER }}
-  ADB_NAME: 'adbtest00'
+  WORKSHOP_TENANT_ID: 8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5
+  WORKSHOP_SUBSCRIPTION_ID: aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483
+  ODAA_SUBSCRIPTION_ID: 4ce5b5cc-e869-451f-98fc-f50448849ee0
+  BASE_DB_SHAPE: ${{ inputs.db_shape }}
+  BASE_DB_VERSION: ${{ inputs.db_version }}
+  BASE_DB_ZONE: ${{ inputs.availability_zone }}
+  BASE_DB_COMPUTE_MODEL: ${{ inputs.compute_model }}
+  BASE_DB_COMPUTE: ${{ inputs.compute_count }}
+  BASE_DB_STORAGE: ${{ inputs.storage_gb }}
+  BASE_DB_OWNER: ${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
-  preflight:
-    name: Preflight Checks
-    runs-on: [self-hosted, azure, container-apps, terraform]
+  phase-b-guard:
+    runs-on: ubuntu-latest
     outputs:
-      should_run: ${{ steps.decision.outputs.should_run }}
+      participant_name: ${{ steps.participant.outputs.participant_name }}
+      vm_name: ${{ steps.participant.outputs.BASE_DB_VM_NAME }}
+      vm_rg: ${{ steps.participant.outputs.BASE_DB_VM_RG }}
+      db_rg: ${{ steps.participant.outputs.BASE_DB_RESOURCE_GROUP }}
+    steps:
+      - name: Block before Phase B without login or Oracle access
+        env:
+          PHASE_B_READY: ${{ vars.WORKSHOP_PHASE_B_READY }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$PHASE_B_READY" == true && "$CONFIRMATION" == RUN_PHASE_B_BASEDB_TEST ]] ||
+            { echo 'BLOCKED: Phase A has no Oracle dependency. Organizer must approve Phase B first.'; exit 1; }
+      - uses: actions/checkout@v4
+      - name: Select the static participant scope
+        id: participant
+        env:
+          PARTICIPANT_INDEX: ${{ inputs.participant }}
+        run: python3 tests/export_shared_config.py --participant "$PARTICIPANT_INDEX"
 
+  test-base-database:
+    needs: phase-b-guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    # Configure separate secrets in each mhuserN GitHub environment.
+    environment: ${{ needs.phase-b-guard.outputs.participant_name }}
+    env:
+      BASE_DB_VM_NAME: ${{ needs.phase-b-guard.outputs.vm_name }}
+      BASE_DB_VM_RG: ${{ needs.phase-b-guard.outputs.vm_rg }}
+      BASE_DB_RESOURCE_GROUP: ${{ needs.phase-b-guard.outputs.db_rg }}
     steps:
       - uses: actions/checkout@v4
+      - uses: azure/login@v2
         with:
-          sparse-checkout: |
-            infra
-          sparse-checkout-cone-mode: false
-
-      - name: Check skip conditions
-        id: decision
-        run: |
-          echo "should_run=true" >> $GITHUB_OUTPUT
-          echo "✅ Tests will run"
-
-  deploy-test-runner:
-    name: Deploy Test Runner
-    runs-on: [self-hosted, azure, container-apps, terraform]
-    needs: preflight
-    if: needs.preflight.outputs.should_run == 'true'
-    defaults:
-      run:
-        working-directory: ${{ env.TF_DIR }}
-    outputs:
-      vm_name: ${{ steps.outputs.outputs.vm_name }}
-      rg_name: ${{ steps.outputs.outputs.rg_name }}
-      dns_rg: ${{ steps.outputs.outputs.dns_rg }}
-
-    steps:
-      - uses: actions/checkout@v4
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.WORKSHOP_TENANT_ID }}
+          subscription-id: ${{ env.WORKSHOP_SUBSCRIPTION_ID }}
+      - uses: actions/setup-python@v5
         with:
-          sparse-checkout: |
-            infra
-          sparse-checkout-cone-mode: false
-
-      - name: Install Terraform
+          python-version: '3.12'
+      - name: Install OCI control-plane client
+        run: python3 -m pip install 'oci-cli==3.96.0'
+      - name: Verify both subscription tenants
         run: |
-          cd /tmp
-          curl -sLO "https://releases.hashicorp.com/terraform/$TF_VERSION/terraform_${TF_VERSION}_linux_amd64.zip"
-          unzip -o terraform_${TF_VERSION}_linux_amd64.zip
-          sudo mv terraform /usr/local/bin/
-          terraform version
-
-      - name: Azure Login
-        run: |
-          az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
-          echo "ARM_USE_MSI=true" >> $GITHUB_ENV
-          echo "ARM_USE_CLI=false" >> $GITHUB_ENV
-          echo "ARM_TENANT_ID=$(az account show --query tenantId -o tsv)" >> $GITHUB_ENV
-          echo "AZURE_CONFIG_DIR=$(mktemp -d)" >> $GITHUB_ENV
-
-      - name: Start MSI Proxy
-        run: |
-          cat > /tmp/msi-proxy.py << 'PROXY'
-          import http.server, urllib.request, os, re
-          class H(http.server.BaseHTTPRequestHandler):
-              def do_GET(self):
-                  q = self.path.find('?')
-                  qs = self.path[q:] if q >= 0 else ''
-                  qs = re.sub(r'api-version=[^&]+', 'api-version=2019-08-01', qs)
-                  url = os.environ['IDENTITY_ENDPOINT'] + qs
-                  req = urllib.request.Request(url)
-                  req.add_header('X-IDENTITY-HEADER', os.environ['IDENTITY_HEADER'])
-                  try:
-                      with urllib.request.urlopen(req) as resp:
-                          body = resp.read()
-                          self.send_response(200)
-                          self.send_header('Content-Type', 'application/json')
-                          self.end_headers()
-                          self.wfile.write(body)
-                  except urllib.error.HTTPError as e:
-                      body = e.read()
-                      self.send_response(e.code)
-                      self.send_header('Content-Type', 'application/json')
-                      self.end_headers()
-                      self.wfile.write(body)
-              def log_message(self, *a): pass
-          http.server.HTTPServer(('127.0.0.1', 54321), H).serve_forever()
-          PROXY
-          python3 /tmp/msi-proxy.py &
-          sleep 1
-          curl -sf "http://127.0.0.1:54321/msi/token?api-version=2019-08-01&resource=https://management.azure.com&client_id=$ARM_CLIENT_ID" | python3 -c "import sys,json; t=json.load(sys.stdin); print('MSI proxy OK, token type:', t.get('token_type','?'))"
-          echo "MSI_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
-          echo "ARM_MSI_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
-          echo "IDENTITY_ENDPOINT=http://127.0.0.1:54321/msi/token" >> $GITHUB_ENV
-
-      - name: Terraform Init
-        run: |
-          terraform init \
-            -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE }}" \
-            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
-            -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
-            -backend-config="use_msi=true" \
-            -backend-config="use_azuread_auth=true" \
-            -backend-config="client_id=$ARM_CLIENT_ID" \
-            -backend-config="msi_endpoint=http://127.0.0.1:54321/msi/token" \
-            -backend-config="subscription_id=${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
-            -backend-config="tenant_id=$ARM_TENANT_ID"
-
-      - name: Terraform Apply
-        run: |
-          terraform apply -auto-approve
-
-      - name: Get Outputs
-        id: outputs
-        run: |
-          echo "vm_name=$(terraform output -raw vm_name)" >> $GITHUB_OUTPUT
-          echo "rg_name=$(terraform output -raw resource_group_name)" >> $GITHUB_OUTPUT
-          echo "dns_rg=$(terraform output -raw dns_zone_rg)" >> $GITHUB_OUTPUT
-
-  setup-adb:
-    name: Create ADB + NSG + DNS
-    runs-on: [self-hosted, azure, container-apps, terraform]
-    needs: [preflight, deploy-test-runner]
-    if: needs.preflight.outputs.should_run == 'true'
-    outputs:
-      adb_ip: ${{ steps.adb.outputs.adb_ip }}
-      adb_label: ${{ steps.adb.outputs.adb_label }}
-      adb_conn_high: ${{ steps.adb.outputs.adb_conn_high }}
-      nsg_ocid: ${{ steps.nsg.outputs.nsg_ocid }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            tests/bicep
-          sparse-checkout-cone-mode: false
-
-      - name: Azure Login
-        run: |
-          az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
-
-      - name: Check existing ADB
-        id: check-adb
-        run: |
-          RESPONSE=$(az rest --method GET \
-            --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
-            2>/dev/null || echo '{"error":"NotFound"}')
-          PROV_STATE=$(echo "$RESPONSE" | jq -r '.properties.provisioningState // "NotFound"')
-          LIFE_STATE=$(echo "$RESPONSE" | jq -r '.properties.lifecycleState // "NotFound"')
-          echo "provisioningState=$PROV_STATE lifecycleState=$LIFE_STATE"
-
-          if [[ "$PROV_STATE" == "Succeeded" && "$LIFE_STATE" == "Available" ]]; then
-            echo "✅ ADB exists and is Available — reusing"
-            ADB_IP=$(echo "$RESPONSE" | jq -r '.properties.privateEndpointIp')
-            ADB_LABEL=$(echo "$RESPONSE" | jq -r '.properties.privateEndpointLabel')
-            echo "adb_exists=true" >> $GITHUB_OUTPUT
-            echo "adb_ip=$ADB_IP" >> $GITHUB_OUTPUT
-            echo "adb_label=$ADB_LABEL" >> $GITHUB_OUTPUT
-          elif [[ "$PROV_STATE" == "NotFound" ]]; then
-            echo "✅ No ADB found — will create"
-            echo "adb_exists=false" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ ADB in unexpected state ($PROV_STATE/$LIFE_STATE) — deleting"
-            if [[ "$PROV_STATE" != "Deleting" ]]; then
-              az rest --method DELETE \
-                --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01"
-            fi
-            echo "⏳ Waiting for deletion..."
-            for i in $(seq 1 60); do
-              STATUS=$(az rest --method GET \
-                --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
-                --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Gone")
-              if [[ "$STATUS" == "Gone" ]]; then echo "✅ Deleted"; break; fi
-              echo "  ($STATUS)... $i/60"; sleep 30
-            done
-            echo "adb_exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Deploy ADB via Bicep
-        if: steps.check-adb.outputs.adb_exists != 'true'
-        id: adb-deploy
-        run: |
-          echo "🚀 Deploying ADB '$ADB_NAME' via Bicep (this takes ~20 minutes)..."
-          BICEP_FILE="${{ env.TESTS_DIR }}/bicep/adb-test.bicep"
-
-          ODAA_VNET_ID=$(az network vnet show \
-            --name vnet-odaa-shared \
-            --resource-group rg-odaa-shared \
-            --subscription "${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}" \
-            -o tsv --query id)
-
-          ODAA_SUBNET_ID=$(az network vnet subnet show \
-            --name snet-odaa-delegated \
-            --vnet-name vnet-odaa-shared \
-            --resource-group rg-odaa-shared \
-            --subscription "${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}" \
-            -o tsv --query id)
-
-          az deployment group create \
-            --resource-group rg-odaa-shared \
-            --subscription "${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}" \
-            --template-file "$BICEP_FILE" \
-            --parameters \
-              adminPassword='${{ secrets.ADB_ADMIN_PASSWORD }}' \
-              subnetId="$ODAA_SUBNET_ID" \
-              vnetId="$ODAA_VNET_ID" \
-              adbName="$ADB_NAME" \
-            --no-wait
-
-          echo "⏳ Waiting for ADB provisioning..."
-          for i in $(seq 1 120); do
-            STATE=$(az rest --method GET \
-              --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01" \
-              --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Pending")
-            if [[ "$STATE" == "Succeeded" ]]; then
-              echo "✅ ADB provisioned"
-              break
-            elif [[ "$STATE" == "Failed" ]]; then
-              echo "❌ ADB provisioning failed"
-              exit 1
-            fi
-            echo "  Provisioning ($STATE)... $i/120"
-            sleep 20
+          set -euo pipefail
+          for subscription in "$WORKSHOP_SUBSCRIPTION_ID" "$ODAA_SUBSCRIPTION_ID"; do
+            [[ "$(az account show --subscription "$subscription" --query tenantId -o tsv)" == "$WORKSHOP_TENANT_ID" ]]
           done
-
-          if [[ "$STATE" != "Succeeded" ]]; then
-            echo "❌ ADB provisioning timed out after 40 minutes (state: $STATE)"
-            exit 1
-          fi
-
-      - name: Get ADB outputs
-        id: adb
-        run: |
-          RESPONSE=$(az rest --method GET \
-            --url "https://management.azure.com/subscriptions/${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/autonomousDatabases/$ADB_NAME?api-version=2025-03-01")
-          ADB_IP=$(echo "$RESPONSE" | jq -r '.properties.privateEndpointIp')
-          ADB_LABEL=$(echo "$RESPONSE" | jq -r '.properties.privateEndpointLabel')
-          # Extract HIGH connection profile TNS string for adbping
-          ADB_CONN_HIGH=$(echo "$RESPONSE" | jq -r '.properties.connectionStrings.profiles[] | select(.displayName=="HIGH") | .value // empty' 2>/dev/null || true)
-          if [ -z "$ADB_CONN_HIGH" ]; then
-            # Fallback: try connectionUrls
-            ADB_CONN_HIGH=$(echo "$RESPONSE" | jq -r '.properties.connectionUrls.high // empty' 2>/dev/null || true)
-          fi
-          echo "adb_ip=$ADB_IP" >> $GITHUB_OUTPUT
-          echo "adb_label=$ADB_LABEL" >> $GITHUB_OUTPUT
-          echo "adb_conn_high=$ADB_CONN_HIGH" >> $GITHUB_OUTPUT
-          echo "✅ ADB deployed: IP=$ADB_IP, Label=$ADB_LABEL"
-
-      - name: Setup OCI CLI
-        run: |
-          # Install pip if missing, then install oci-cli
-          python3 -m ensurepip --upgrade 2>/dev/null || \
-            (curl -sS https://bootstrap.pypa.io/get-pip.py | python3 - --user --quiet)
-          python3 -m pip install --user oci-cli --quiet
-          export PATH="$HOME/.local/bin:$PATH"
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          oci --version
-          mkdir -p ~/.oci
-          cat > ~/.oci/config << EOF
-          [DEFAULT]
-          user=${{ secrets.OCI_USER_OCID }}
-          fingerprint=${{ secrets.OCI_FINGERPRINT }}
-          tenancy=${{ secrets.OCI_TENANCY_OCID }}
-          region=${{ secrets.OCI_REGION }}
-          key_file=~/.oci/oci_api_key.pem
-          pass_phrase=${{ secrets.OCI_PASSPHRASE }}
-          EOF
-          echo '${{ secrets.OCI_KEY_PEM }}' > ~/.oci/oci_api_key.pem
-          chmod 600 ~/.oci/oci_api_key.pem ~/.oci/config
-
-      - name: Add OCI NSG rule for test-runner subnet
-        id: nsg
+      - name: Read successful canonical ARM deployment outputs (no Terraform state)
         env:
-          OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: "True"
+          HUB_DEPLOYMENT_ID: ${{ vars.WORKSHOP_HUB_DEPLOYMENT_ID }}
+          NETWORK_DEPLOYMENT_ID: ${{ vars.WORKSHOP_ORACLE_NETWORK_DEPLOYMENT_ID }}
+          ANCHOR_DEPLOYMENT_ID: ${{ vars.WORKSHOP_NETWORK_ANCHOR_DEPLOYMENT_ID }}
+          DNS_DEPLOYMENT_ID: ${{ vars.WORKSHOP_ORACLE_DNS_DEPLOYMENT_ID }}
         run: |
-          echo "🔒 Looking up OCI NSG for ADB..."
-
-          # ODAA creates NSGs in a sub-compartment named after the Azure subscription ID.
-          # Find that compartment first, then locate the ADB's NSG.
-          TENANCY="${{ secrets.OCI_TENANCY_OCID }}"
-          SUB_ID="${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}"
-
-          NSG_COMPARTMENT=$(oci iam compartment list \
-            --compartment-id "$TENANCY" \
-            --compartment-id-in-subtree true --all \
-            --query "data[?name=='$SUB_ID'].id | [0]" --raw-output 2>/dev/null || true)
-
-          if [[ -z "$NSG_COMPARTMENT" || "$NSG_COMPARTMENT" == "None" ]]; then
-            echo "⚠️ Could not find subscription compartment in OCI"
-            echo "nsg_ocid=" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          echo "  Found NSG compartment: $NSG_COMPARTMENT"
-
-          # Find the NSG matching our ADB name
-          NSG_OCID=$(oci network nsg list \
-            --compartment-id "$NSG_COMPARTMENT" \
-            --query "data[?\"display-name\"=='${ADB_NAME}_NSG'] | [0].id" --raw-output 2>/dev/null || true)
-
-          if [[ -z "$NSG_OCID" || "$NSG_OCID" == "None" ]]; then
-            echo "ℹ️ No NSG named ${ADB_NAME}_NSG found"
-            echo "nsg_ocid=" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          echo "  Found NSG: $NSG_OCID"
-          echo "nsg_ocid=$NSG_OCID" >> $GITHUB_OUTPUT
-
-          # Check if rule already exists
-          EXISTING=$(oci network nsg rules list \
-            --nsg-id "$NSG_OCID" \
-            --direction INGRESS \
-            --query "data[?source=='10.200.0.0/24'] | length(@)" --raw-output)
-
-          if [[ "$EXISTING" == "0" ]]; then
-            oci network nsg rules add \
-              --nsg-id "$NSG_OCID" \
-              --security-rules '[{
-                "direction": "INGRESS",
-                "protocol": "all",
-                "source": "10.200.0.0/24",
-                "sourceType": "CIDR_BLOCK",
-                "description": "Allow test-runner to ADB (all protocols)"
-              }]'
-            echo "✅ NSG rule added (all protocols, all ports)"
-          else
-            echo "ℹ️ NSG rule already exists"
-          fi
-
-      - name: Create DNS A-record for ADB
+          set -euo pipefail
+          : "${HUB_DEPLOYMENT_ID:?Required canonical stage 02 deployment ID}"
+          : "${NETWORK_DEPLOYMENT_ID:?Required canonical stage 04 deployment ID}"
+          : "${ANCHOR_DEPLOYMENT_ID:?Required canonical stage 06 deployment ID}"
+          : "${DNS_DEPLOYMENT_ID:?Required canonical stage 07 deployment ID}"
+          python3 tests/export_shared_config.py \
+            --deployment-id "$HUB_DEPLOYMENT_ID" \
+            --deployment-id "$NETWORK_DEPLOYMENT_ID" \
+            --deployment-id "$ANCHOR_DEPLOYMENT_ID" \
+            --deployment-id "$DNS_DEPLOYMENT_ID"
+      - name: Read existing VM subnet and verify central anchor before provisioning
         run: |
-          echo "📝 Creating DNS A-record for ADB..."
-          ADB_IP="${{ steps.adb.outputs.adb_ip }}"
-          ADB_LABEL="${{ steps.adb.outputs.adb_label }}"
-          DNS_RG="${{ needs.deploy-test-runner.outputs.dns_rg }}"
-
-          # Create A-record in test-runner's private DNS zone
-          az network private-dns record-set a add-record \
-            --zone-name "adb.eu-paris-1.oraclecloud.com" \
-            --resource-group "$DNS_RG" \
-            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
-            --record-set-name "$ADB_LABEL" \
-            --ipv4-address "$ADB_IP" \
-            2>/dev/null || true
-
-          echo "✅ DNS A-record created: ${ADB_LABEL}.adb.eu-paris-1.oraclecloud.com → $ADB_IP"
-
-  run-tests:
-    name: Run BATS Tests
-    runs-on: [self-hosted, azure, container-apps, terraform]
-    needs: [deploy-test-runner, setup-adb]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            tests
-          sparse-checkout-cone-mode: false
-
-      - name: Azure Login
+          set -euo pipefail
+          nic_id="$(az vm show --subscription "$WORKSHOP_SUBSCRIPTION_ID" \
+            --resource-group "$BASE_DB_VM_RG" --name "$BASE_DB_VM_NAME" \
+            --query 'networkProfile.networkInterfaces[0].id' -o tsv)"
+          [[ -n "$nic_id" ]]
+          subnet_id="$(az network nic show --ids "$nic_id" \
+            --query 'ipConfigurations[0].subnet.id' -o tsv)"
+          prefix="/subscriptions/$WORKSHOP_SUBSCRIPTION_ID/resourceGroups/$BASE_DB_VM_RG/providers/Microsoft.Network/virtualNetworks/"
+          [[ "${subnet_id,,}" == "${prefix,,}"*/subnets/* ]]
+          vnet_id="${subnet_id%/subnets/*}"
+          echo "BASE_DB_VM_VNET_NAME=${vnet_id##*/}" >> "$GITHUB_ENV"
+          python3 tests/base_database.py anchor-check
+          python3 tests/base_database.py preflight
+      - name: Grant scoped topology Reader to the selected VM identity
         run: |
-          az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
-
-      - name: Wait for VM readiness
-        run: |
-          echo "Waiting 60s for cloud-init to complete..."
-          sleep 60
-
-      - name: Setup OCI config on test-runner VM
-        run: |
-          az vm run-command invoke \
-            --resource-group "${{ needs.deploy-test-runner.outputs.rg_name }}" \
-            --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
-            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
-            --command-id RunShellScript \
-            --scripts "
-              mkdir -p /home/azureuser/.oci
-              cat > /home/azureuser/.oci/config << 'OCICONF'
-          [DEFAULT]
-          user=${{ secrets.OCI_USER_OCID }}
-          fingerprint=${{ secrets.OCI_FINGERPRINT }}
-          tenancy=${{ secrets.OCI_TENANCY_OCID }}
-          region=${{ secrets.OCI_REGION }}
-          key_file=/home/azureuser/.oci/oci_api_key.pem
-          OCICONF
-              echo '${{ secrets.OCI_KEY_PEM }}' > /home/azureuser/.oci/oci_api_key.pem
-              chmod 600 /home/azureuser/.oci/config /home/azureuser/.oci/oci_api_key.pem
-              chown -R azureuser:azureuser /home/azureuser/.oci
-              echo 'OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True' >> /etc/environment
-              echo 'OCI_KEY_PASSPHRASE=${{ secrets.OCI_PASSPHRASE }}' >> /etc/environment
-              echo 'TEST_NSG_OCID=${{ needs.setup-adb.outputs.nsg_ocid }}' >> /etc/environment
-            "
-
-      - name: Deploy test files to VM
-        run: |
-          TESTS_DIR="tests"
-          TAR_B64=$(tar -czf - -C "$TESTS_DIR" . | base64 -w0)
-          az vm run-command invoke \
-            --resource-group "${{ needs.deploy-test-runner.outputs.rg_name }}" \
-            --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
-            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
-            --command-id RunShellScript \
-            --scripts "echo '$TAR_B64' | base64 -d | tar -xzf - -C /opt/tests && chmod +x /opt/tests/run-tests.sh && echo 'Tests deployed successfully'"
-
-      - name: Run BATS Tests
-        id: tests
-        run: |
-          echo "Running standalone E2E challenge tests on test-runner VM..."
-          RESULT=$(az vm run-command invoke \
-            --resource-group "${{ needs.deploy-test-runner.outputs.rg_name }}" \
-            --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
-            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
-            --command-id RunShellScript \
-            --scripts "source /etc/environment 2>/dev/null; export TEST_MH0_SUB='${{ vars.TF_MH0_SUBSCRIPTION_ID }}' && export TEST_MHODAA_SUB='${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}' && export TEST_MHCORE_SUB='${{ vars.TF_STATE_SUBSCRIPTION_ID }}' && export TEST_ADB_NAME='$ADB_NAME' && export TEST_NSG_OCID='${{ needs.setup-adb.outputs.nsg_ocid }}' && /opt/tests/run-tests.sh" \
-            -o json)
-
-          echo "$RESULT" | jq -r '.value[0].message' | tee /tmp/test-output.txt
-
-          # Check for test failures (TAP format: "not ok" = failure)
-          if echo "$RESULT" | jq -r '.value[0].message' | grep -q "^not ok"; then
-            echo "test_passed=false" >> $GITHUB_OUTPUT
-          else
-            echo "test_passed=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Run connping against ADB
-        id: connping
-        run: |
-          echo "🔌 Running connping to ADB endpoint..."
-          ADB_IP="${{ needs.setup-adb.outputs.adb_ip }}"
-          RESULT=$(az vm run-command invoke \
-            --resource-group "${{ needs.deploy-test-runner.outputs.rg_name }}" \
-            --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
-            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
-            --command-id RunShellScript \
-            --scripts "export PATH=/opt/oracle/rwloadsim/bin:/opt/oracle/instantclient:\$PATH; export LD_LIBRARY_PATH=/opt/oracle/instantclient:\$LD_LIBRARY_PATH; connping ${ADB_IP} 1522" \
-            -o json)
-          OUTPUT=$(echo "$RESULT" | jq -r '.value[0].message')
-          echo "$OUTPUT" | tee /tmp/connping-output.txt
-          if echo "$OUTPUT" | grep -qi "error\|fail\|refused"; then
-            echo "connping_passed=false" >> $GITHUB_OUTPUT
-          else
-            echo "connping_passed=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Run adbping against ADB
-        id: adbping
-        run: |
-          echo "🏓 Running adbping to ADB endpoint..."
-          ADB_CONN="${{ needs.setup-adb.outputs.adb_conn_high }}"
-          if [ -z "$ADB_CONN" ]; then
-            echo "⚠️ No connection string available, using IP-based fallback"
-            ADB_IP="${{ needs.setup-adb.outputs.adb_ip }}"
-            ADB_LABEL="${{ needs.setup-adb.outputs.adb_label }}"
-            ADB_CONN="(description=(retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1522)(host=${ADB_LABEL}.adb.eu-paris-1.oraclecloud.com))(connect_data=(service_name=${ADB_LABEL}_high.adb.oraclecloud.com))(security=(ssl_server_dn_match=no)))"
-          fi
-          RESULT=$(az vm run-command invoke \
-            --resource-group "${{ needs.deploy-test-runner.outputs.rg_name }}" \
-            --name "${{ needs.deploy-test-runner.outputs.vm_name }}" \
-            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
-            --command-id RunShellScript \
-            --scripts "export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64; adbping -u ADMIN -p '${{ secrets.ADB_ADMIN_PASSWORD }}' -s '${ADB_CONN}' -w /opt/oracle/adbping/rootwallet_for_onewaytls -i /opt/oracle/instantclient -j /usr/lib/jvm/java-17-openjdk-amd64" \
-            -o json)
-          OUTPUT=$(echo "$RESULT" | jq -r '.value[0].message')
-          echo "$OUTPUT" | tee /tmp/adbping-output.txt
-          if echo "$OUTPUT" | grep -qi "error\|fail\|refused"; then
-            echo "adbping_passed=false" >> $GITHUB_OUTPUT
-          else
-            echo "adbping_passed=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Generate Test Report
-        if: always()
-        run: |
-          mkdir -p /tmp/test-report
-
-          # Create a markdown test report
-          cat > /tmp/test-report/test-report.md << 'EOF'
-          # Workshop Test Report
-          EOF
-
-          cat >> /tmp/test-report/test-report.md << EOF
-
-          **Date:** $(date -u '+%Y-%m-%d %H:%M UTC')
-          **ADB:** $ADB_NAME
-          **Trigger:** ${{ github.event_name }}
-          **Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-          ## BATS Challenge Tests
-
-          \`\`\`
-          $(cat /tmp/test-output.txt 2>/dev/null || echo "No output captured")
-          \`\`\`
-
-          ## connping Result
-
-          **Status:** $( [ "${{ steps.connping.outputs.connping_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" )
-
-          \`\`\`
-          $(cat /tmp/connping-output.txt 2>/dev/null || echo "No output captured")
-          \`\`\`
-
-          ## adbping Result
-
-          **Status:** $( [ "${{ steps.adbping.outputs.adbping_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" )
-
-          \`\`\`
-          $(cat /tmp/adbping-output.txt 2>/dev/null || echo "No output captured")
-          \`\`\`
-
-          ## Summary
-
-          | Test | Status |
-          |------|--------|
-          | BATS Challenges | $( [ "${{ steps.tests.outputs.test_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" ) |
-          | connping | $( [ "${{ steps.connping.outputs.connping_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" ) |
-          | adbping | $( [ "${{ steps.adbping.outputs.adbping_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" ) |
-          EOF
-
-          # Also save raw outputs
-          cp /tmp/test-output.txt /tmp/test-report/bats-output.txt 2>/dev/null || true
-          cp /tmp/connping-output.txt /tmp/test-report/connping-output.txt 2>/dev/null || true
-          cp /tmp/adbping-output.txt /tmp/test-report/adbping-output.txt 2>/dev/null || true
-
-      - name: Upload Test Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-report-${{ github.run_id }}
-          path: /tmp/test-report/
-          retention-days: 90
-
-      - name: Test Summary
-        if: always()
-        run: |
-          echo "## 🧪 Workshop Challenge Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Trigger:** ${{ github.event_name }} | **ADB:** $ADB_NAME" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### BATS Tests" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/test-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No test output captured"
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Connectivity Tests" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Tool | Status | Detail |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|--------|--------|" >> $GITHUB_STEP_SUMMARY
-          CONNPING_STATUS=$( [ "${{ steps.connping.outputs.connping_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" )
-          ADBPING_STATUS=$( [ "${{ steps.adbping.outputs.adbping_passed }}" = "true" ] && echo "✅ PASS" || echo "❌ FAIL" )
-          echo "| connping | $CONNPING_STATUS | $(head -1 /tmp/connping-output.txt 2>/dev/null || echo 'n/a') |" >> $GITHUB_STEP_SUMMARY
-          echo "| adbping | $ADBPING_STATUS | $(head -1 /tmp/adbping-output.txt 2>/dev/null || echo 'n/a') |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Fail if any test failed
-          FAILED=false
-          [ "${{ steps.tests.outputs.test_passed }}" = "false" ] && FAILED=true
-          [ "${{ steps.connping.outputs.connping_passed }}" = "false" ] && FAILED=true
-          [ "${{ steps.adbping.outputs.adbping_passed }}" = "false" ] && FAILED=true
-
-          if [ "$FAILED" = "true" ]; then
-            echo "❌ **Some tests failed!** Review output above." >> $GITHUB_STEP_SUMMARY
-            exit 1
-          else
-            echo "✅ **All tests passed.**" >> $GITHUB_STEP_SUMMARY
-          fi
-
-  cleanup:
-    name: Cleanup ADB
-    runs-on: [self-hosted, azure, container-apps, terraform]
-    needs: [deploy-test-runner, setup-adb, run-tests]
-    if: always() && needs.setup-adb.result == 'success'
-
-    steps:
-      - name: Azure Login
-        run: |
-          az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
-
-      - name: Delete ADB
-        run: |
-          echo "🗑️ Deleting test ADB '$ADB_NAME' (this may take several minutes)..."
-          az oracle-database autonomous-database delete \
-            --name "$ADB_NAME" \
-            --resource-group rg-odaa-shared \
-            --subscription "${{ vars.TF_MHODAA_SUBSCRIPTION_ID }}" \
-            --yes || true
-          echo "✅ ADB deleted"
-
-      - name: Remove DNS A-record
-        run: |
-          echo "🗑️ Removing test DNS A-record..."
-          ADB_LABEL="${{ needs.setup-adb.outputs.adb_label }}"
-          DNS_RG="${{ needs.deploy-test-runner.outputs.dns_rg }}"
-          az network private-dns record-set a delete \
-            --zone-name "adb.eu-paris-1.oraclecloud.com" \
-            --resource-group "$DNS_RG" \
-            --subscription "${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
-            --name "$ADB_LABEL" \
-            --yes 2>/dev/null || true
-          echo "✅ DNS cleanup done"
-
-      - name: Remove OCI NSG Rule
-        if: always() && needs.setup-adb.outputs.nsg_ocid != ''
+          set -euo pipefail
+          principal="$(az vm show --subscription "$WORKSHOP_SUBSCRIPTION_ID" \
+            --resource-group "$BASE_DB_VM_RG" --name "$BASE_DB_VM_NAME" \
+            --query identity.principalId -o tsv)"
+          [[ "$principal" =~ ^[0-9a-fA-F-]{36}$ ]]
+          for scope in \
+            "/subscriptions/$WORKSHOP_SUBSCRIPTION_ID/resourceGroups/$BASE_DB_VM_RG" \
+            "/subscriptions/$WORKSHOP_SUBSCRIPTION_ID/resourceGroups/rg-workshop-hub" \
+            "/subscriptions/$ODAA_SUBSCRIPTION_ID/resourceGroups/$BASE_DB_RESOURCE_GROUP" \
+            "/subscriptions/$ODAA_SUBSCRIPTION_ID/resourceGroups/rg-odaa-shared"; do
+            subscription="${scope#/subscriptions/}"
+            subscription="${subscription%%/*}"
+            name="$(python3 -c 'import sys, uuid; print(uuid.uuid5(uuid.NAMESPACE_URL, sys.argv[1].lower()))' "$scope/$principal/reader")"
+            az role assignment create --subscription "$subscription" \
+              --assignee-object-id "$principal" --assignee-principal-type ServicePrincipal \
+              --role acdd72a7-3385-48ef-bd42-f606fba81ae7 \
+              --scope "$scope" --name "$name" --output none
+          done
+      - name: Validate separate secure SQL credentials and SSH key
         env:
+          BASE_DB_SYS_PASSWORD: ${{ secrets.BASE_DB_SYS_PASSWORD }}
+          BASE_DB_TEST_PASSWORD: ${{ secrets.BASE_DB_TEST_PASSWORD }}
+          BASE_DB_SSH_PUBLIC_KEY: ${{ vars.BASE_DB_SSH_PUBLIC_KEY }}
+        run: |
+          [[ -n "$BASE_DB_SYS_PASSWORD" && -n "$BASE_DB_TEST_PASSWORD" && -n "$BASE_DB_SSH_PUBLIC_KEY" ]]
+          [[ "$BASE_DB_SYS_PASSWORD" != "$BASE_DB_TEST_PASSWORD" ]]
+      - name: Create only the test DB in the selected participant RG
+        env:
+          BASE_DB_SYS_PASSWORD: ${{ secrets.BASE_DB_SYS_PASSWORD }}
+          BASE_DB_SSH_PUBLIC_KEY: ${{ vars.BASE_DB_SSH_PUBLIC_KEY }}
+        run: python3 tests/base_database.py create
+      - name: Discover authoritative native Oracle DNS and PDB service (read-only)
+        env:
+          OCI_COMPARTMENT_ID: ${{ vars.OCI_COMPARTMENT_ID }}
           OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
           OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
           OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
           OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
-          OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
-        run: |
-          echo "🗑️ Removing test-runner NSG rule..."
-          command -v oci >/dev/null 2>&1 || python3 -m pip install --user oci-cli --quiet 2>/dev/null || true
-          NSG_OCID="${{ needs.setup-adb.outputs.nsg_ocid }}"
-          # Find and remove rules with source 10.200.0.0/24
-          RULE_IDS=$(oci network nsg rules list \
-            --nsg-id "$NSG_OCID" \
-            --direction INGRESS \
-            --query "data[?source=='10.200.0.0/24'].id" --raw-output 2>/dev/null | tr -d '[]" ' | tr ',' '\n')
-          for RULE_ID in $RULE_IDS; do
-            [[ -z "$RULE_ID" || "$RULE_ID" == "None" ]] && continue
-            oci network nsg rules remove \
-              --nsg-id "$NSG_OCID" \
-              --security-rule-ids "[\"$RULE_ID\"]" --force 2>/dev/null || true
-            echo "  Removed rule: $RULE_ID"
-          done
-          echo "✅ NSG rules cleaned up"
-
-  notify-failure:
-    name: Create Issue on Failure
-    runs-on: ubuntu-latest
-    needs: run-tests
-    if: failure()
-    permissions:
-      issues: write
-
-    steps:
-      - name: Create failure issue
-        uses: actions/github-script@v7
+          OCI_CLI_REGION: eu-paris-1
+        run: python3 tests/base_database.py discover
+      - name: Create private temporary hub DNS diagnostic VM
+        run: python3 tests/hub_dns_diagnostic.py create
+      - name: Require UDP/TCP endpoint DNS and Oracle-to-Azure forwarding from the hub
+        run: python3 tests/hub_dns_diagnostic.py probe
+      - name: Run firewall-only participant DNS and real PDB SQL probes on the existing VM
+        env:
+          BASE_DB_SYS_PASSWORD: ${{ secrets.BASE_DB_SYS_PASSWORD }}
+          BASE_DB_TEST_PASSWORD: ${{ secrets.BASE_DB_TEST_PASSWORD }}
+        run: python3 tests/base_database.py remote
+      - name: Renew OIDC login before cleanup after long-running database tests
+        if: always()
+        uses: azure/login@v2
         with:
-          script: |
-            const title = `🧪 Workshop tests failed (${new Date().toISOString().split('T')[0]})`;
-            const body = [
-              `## Test Failure Report`,
-              ``,
-              `| Field | Value |`,
-              `|-------|-------|`,
-              `| **Workflow Run** | [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) |`,
-              `| **Trigger** | ${context.eventName} |`,
-              `| **ADB** | ${process.env.ADB_NAME} |`,
-              `| **Date** | ${new Date().toISOString()} |`,
-              ``,
-              `Review the workflow run for detailed test output (Step Summary).`,
-            ].join('\n');
-
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              labels: 'test-failure',
-              state: 'open',
-            });
-
-            if (issues.data.length === 0) {
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title,
-                body,
-                labels: ['test-failure'],
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issues.data[0].number,
-                body: `### New failure (${new Date().toISOString()})\n\n${body}`,
-              });
-            }
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.WORKSHOP_TENANT_ID }}
+          subscription-id: ${{ env.WORKSHOP_SUBSCRIPTION_ID }}
+      - name: Delete only this run's owned test DB
+        if: always()
+        run: python3 tests/base_database.py cleanup
+      - name: Delete only this run's temporary diagnostic resource group
+        if: always()
+        run: python3 tests/hub_dns_diagnostic.py cleanup
+      - name: Remove interrupted private request file
+        if: always()
+        run: rm -f .base-db-request.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: base-db-test-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            base-db-run-command.json
+            hub-dns-run-command.json
+          if-no-files-found: warn
+          retention-days: 30

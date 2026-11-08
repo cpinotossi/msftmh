@@ -12,8 +12,9 @@
 provider "azurerm" {
   alias           = "mhcore"
   subscription_id = var.mhcore_subscription_id
-  use_cli         = false
-  use_msi         = true
+  tenant_id       = var.tenant_id
+  use_cli         = !var.use_msi
+  use_msi         = var.use_msi
 
   features {
     resource_group {
@@ -29,8 +30,9 @@ provider "azurerm" {
 provider "azurerm" {
   alias           = "mhodaa"
   subscription_id = var.mhodaa_subscription_id
-  use_cli         = false
-  use_msi         = true
+  tenant_id       = var.tenant_id
+  use_cli         = !var.use_msi
+  use_msi         = var.use_msi
 
   features {
     resource_group {
@@ -45,6 +47,7 @@ provider "azurerm" {
 
 provider "azapi" {
   subscription_id = var.mhodaa_subscription_id
-  use_cli         = false
-  use_msi         = true
+  tenant_id       = var.tenant_id
+  use_cli         = !var.use_msi
+  use_msi         = var.use_msi
 }

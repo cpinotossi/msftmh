@@ -1,0 +1,55 @@
+# Directory reads only. No backend, state, password resets, or user creation.
+name: Read Fixed Workshop Identity
+
+on:
+  workflow_call:
+    outputs:
+      user_object_ids:
+        description: Seven current directory object IDs keyed 01 through 07
+        value: ${{ jobs.identity.outputs.user_object_ids }}
+      group_id:
+        description: Verified workshop participants security group ID
+        value: ${{ jobs.identity.outputs.group_id }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  identity:
+    runs-on: ubuntu-latest
+    outputs:
+      user_object_ids: ${{ steps.roster.outputs.user_object_ids }}
+      group_id: ${{ steps.roster.outputs.group_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: '8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5'
+          allow-no-subscriptions: true
+      - name: Verify Directory Without Mutations
+        run: |
+          install -d -m 700 "$RUNNER_TEMP/workshop-identity"
+          pwsh -NoProfile -File infra/identity/provision.ps1 -ReadOnly \
+            -OutputFile "$RUNNER_TEMP/workshop-identity/identities.json"
+      - name: Require Exactly Seven Directory IDs
+        id: roster
+        run: |
+          export IDENTITY_EXPORT="$RUNNER_TEMP/workshop-identity/identities.json"
+          python3 -c '
+          import json, os, uuid
+          with open(os.environ["IDENTITY_EXPORT"]) as source:
+              identity = json.load(source)
+          if identity["tenant_id"] != "8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5":
+              raise SystemExit("Identity export belongs to the wrong tenant")
+          users = identity["user_object_ids"]
+          if sorted(users) != ["01", "02", "03", "04", "05", "06", "07"]:
+              raise SystemExit("Exactly seven current directory IDs are required")
+          identifiers = [uuid.UUID(value) for value in list(users.values()) + [identity["group_id"]]]
+          if len(set(identifiers)) != 8 or any(value.int == 0 for value in identifiers):
+              raise SystemExit("Directory IDs must be distinct and nonzero")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("user_object_ids=" + json.dumps(users, separators=(",", ":")) + "\n")
+              output.write("group_id=" + identity["group_id"] + "\n")
+          '

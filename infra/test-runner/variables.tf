@@ -5,21 +5,31 @@
 variable "tenant_id" {
   description = "Azure AD tenant ID"
   type        = string
+  default     = "8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5"
 }
 
 variable "mhcore_subscription_id" {
   description = "Azure subscription ID for shared resources (sub-mhcore)"
   type        = string
+  default     = "aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483"
 }
 
 variable "mh0_subscription_id" {
   description = "Azure subscription ID for user VMs (sub-mh0)"
   type        = string
+  default     = "aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483"
 }
 
 variable "mhodaa_subscription_id" {
   description = "Azure subscription ID for ODAA resources (sub-mhodaa)"
   type        = string
+  default     = "4ce5b5cc-e869-451f-98fc-f50448849ee0"
+}
+
+variable "use_msi" {
+  description = "Use managed identity in CI; false uses the signed-in Azure CLI"
+  type        = bool
+  default     = false
 }
 
 variable "tf_state_storage" {

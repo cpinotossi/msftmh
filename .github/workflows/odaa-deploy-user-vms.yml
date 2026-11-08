@@ -1,0 +1,91 @@
+name: 03 - Deploy Seven User VMs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: workshop-stage-03-user-vms
+  cancel-in-progress: false
+
+env:
+  ARM_TENANT_ID: '8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5'
+  WORKSHOP_SUBSCRIPTION_ID: 'aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483'
+
+jobs:
+  identity:
+    uses: ./.github/workflows/odaa-read-identity.yml
+  vms:
+    needs: identity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Static VM Configuration
+        run: |
+          az bicep build-params --file infra/deployments/03-user-vms.bicepparam \
+            --outfile "$RUNNER_TEMP/user-vms.parameters.json"
+          az bicep build --file infra/deployments/03-user-vms.bicep \
+            --outfile "$RUNNER_TEMP/user-vms.template.json"
+      - name: Validate SSH Key and Map Seven Directory IDs
+        id: participants
+        env:
+          IDENTITY_OBJECT_IDS: ${{ needs.identity.outputs.user_object_ids }}
+        run: |
+          python3 -c '
+          import json, os
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "user-vms.parameters.json")) as source:
+              parameters = json.load(source)["parameters"]
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "user-vms.template.json")) as source:
+              template = json.load(source)
+          key = parameters["adminSshPublicKey"]["value"]
+          if not key or not key.startswith(("ssh-ed25519 ", "ssh-rsa ", "ecdsa-sha2-")):
+              raise SystemExit("Set the public SSH key in static 03-user-vms.bicepparam")
+          image = parameters.get("vmImageId", {}).get("value", template["parameters"]["vmImageId"]["defaultValue"])
+          expected = "/subscriptions/aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483/resourceGroups/rg-workshop-images/providers/Microsoft.Compute/galleries/gal_oracle_workshop/images/oracle-workshop-vm/versions/1.1.0"
+          if image != expected:
+              raise SystemExit("Only the approved fixed workshop image version 1.1.0 is allowed")
+          identity = json.loads(os.environ["IDENTITY_OBJECT_IDS"])
+          names = {"01":"mhuser1", "02":"mhuser2", "03":"mhuser3", "04":"mhuser4",
+                   "05":"mhuser5", "06":"mhuser6", "07":"mhuser7"}
+          if set(identity) != set(names):
+              raise SystemExit("Exactly seven verified directory IDs are required")
+          users = {names[key]: identity[key] for key in names}
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("user_object_ids=" + json.dumps(users, separators=(",", ":")) + "\n")
+              output.write("image_id=" + image + "\n")
+          '
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          subscription-id: ${{ env.WORKSHOP_SUBSCRIPTION_ID }}
+      - name: Require Published Image and Seven-VM Quota
+        env:
+          IMAGE_ID: ${{ steps.participants.outputs.image_id }}
+        run: |
+          image="$(az sig image-version show --ids "$IMAGE_ID" --expand ReplicationStatus --output json)"
+          export IMAGE_RESPONSE="$image"
+          python3 -c '
+          import json, os
+          image = json.loads(os.environ["IMAGE_RESPONSE"])
+          if image.get("provisioningState") != "Succeeded":
+              raise SystemExit("Published image version 1.1.0 is missing or not ready")
+          replication = image.get("replicationStatus", {})
+          regions = [r for r in replication.get("summary", []) if r.get("region", "").lower() == "francecentral"]
+          if replication.get("aggregatedState") != "Completed" or len(regions) != 1 or regions[0].get("state") != "Completed":
+              raise SystemExit("Image replication to France Central is not complete")
+          print("Image version and regional replication checks passed")
+          '
+          python3 infra/packer/check_vm_prerequisites.py users
+      - name: Deploy Seven User VMs Only
+        env:
+          USER_OBJECT_IDS: ${{ steps.participants.outputs.user_object_ids }}
+        run: |
+          az deployment sub create --name workshop-03-user-vms --location francecentral \
+            --subscription "$WORKSHOP_SUBSCRIPTION_ID" \
+            --template-file infra/deployments/03-user-vms.bicep \
+            --parameters @"$RUNNER_TEMP/user-vms.parameters.json" userObjectIds="$USER_OBJECT_IDS" \
+            --output none

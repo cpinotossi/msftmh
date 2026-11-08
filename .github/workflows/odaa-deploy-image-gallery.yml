@@ -1,0 +1,30 @@
+name: 02a - Deploy Image Gallery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: workshop-stage-02-image-gallery
+  cancel-in-progress: false
+
+jobs:
+  gallery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: '8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5'
+          subscription-id: 'aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483'
+      - name: Deploy gallery and NVMe-capable definition only
+        run: |
+          az group create --subscription aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483 \
+            --name rg-workshop-images --location francecentral --output none
+          az deployment group create --subscription aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483 \
+            --resource-group rg-workshop-images --name workshop-image-gallery \
+            --template-file infra/deployments/02-image-gallery.bicep --output none

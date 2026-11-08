@@ -3,6 +3,8 @@
 Automates Azure AD (Entra ID) setup to enable SSO (OIDC group-based) for an existing Oracle Autonomous Database (ADB).
 
 .DESCRIPTION
+Legacy optional ADB utility, not used by the Base Database workshop.
+It does not configure Base Database TLS or database-side token authentication.
 Creates (idempotently):
  1. Security groups for DB role mapping (ODB_DBA, ODB_READWRITE, ODB_READONLY) and optional custom names.
  2. An App Registration configured to emit group claims in access & id tokens.

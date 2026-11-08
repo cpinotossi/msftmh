@@ -3,12 +3,12 @@
 # ===============================================================================
 
 variable "user_index" {
-  description = "Index of the user (0-24)"
+  description = "Participant number, starting at 1"
   type        = number
 
   validation {
-    condition     = var.user_index >= 0 && var.user_index <= 24
-    error_message = "user_index must be between 0 and 24"
+    condition     = var.user_index >= 1 && var.user_index <= 25 && floor(var.user_index) == var.user_index
+    error_message = "user_index must be an integer between 1 and 25"
   }
 }
 
@@ -19,6 +19,21 @@ variable "location" {
 
 variable "vnet_cidr" {
   description = "CIDR block for the VM VNet (e.g., 10.0.0.0/16)"
+  type        = string
+}
+
+variable "firewall_private_ip" {
+  description = "Hub firewall DNS proxy and routing next-hop address"
+  type        = string
+}
+
+variable "hub_bastion_subnet_cidr" {
+  description = "Only the centrally managed Bastion subnet may initiate SSH"
+  type        = string
+}
+
+variable "odaa_subnet_cidr" {
+  description = "Exact Oracle delegated subnet prefix, not the broader ODAA VNet"
   type        = string
 }
 
@@ -66,7 +81,7 @@ variable "create_public_ip" {
 variable "enable_bastion" {
   description = "Create an Azure Bastion host for VM access"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "bastion_sku" {
@@ -89,7 +104,7 @@ variable "enable_nat_gateway" {
 variable "create_dns_link" {
   description = "Create a Private DNS Zone link (must be known at plan time)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "dns_zone_id" {
@@ -99,9 +114,9 @@ variable "dns_zone_id" {
 }
 
 variable "dns_zone_name" {
-  description = "Name of the Private DNS Zone for ODAA"
+  description = "Private DNS zone for workshop Base Database node aliases"
   type        = string
-  default     = "adb.eu-paris-1.oraclecloud.com"
+  default     = "basedb.workshop.internal"
 }
 
 variable "dns_zone_resource_group" {

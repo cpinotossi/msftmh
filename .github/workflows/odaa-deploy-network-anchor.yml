@@ -1,0 +1,45 @@
+name: 06 - Deploy Network Anchor
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: workshop-stage-06-network-anchor
+  cancel-in-progress: false
+
+jobs:
+  oracle:
+    uses: ./.github/workflows/odaa-require-oracle-subscription.yml
+  anchor:
+    needs: oracle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and Check Static Anchor Configuration
+        run: |
+          az bicep build-params --file infra/deployments/06-network-anchor.bicepparam \
+            --outfile "$RUNNER_TEMP/network-anchor.parameters.json"
+          python3 -c '
+          import json, os
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "network-anchor.parameters.json")) as source:
+              parameters = json.load(source)["parameters"]
+          if parameters["zone"]["value"] != "1":
+              raise SystemExit("This deployment uses the fixed approved zone 1")
+          '
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: '8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5'
+          subscription-id: '4ce5b5cc-e869-451f-98fc-f50448849ee0'
+      - name: Deploy Network Anchor Only
+        run: |
+          az deployment group create --name workshop-06-network-anchor \
+            --resource-group rg-odaa-shared \
+            --subscription 4ce5b5cc-e869-451f-98fc-f50448849ee0 \
+            --template-file infra/deployments/06-network-anchor.bicep \
+            --parameters @"$RUNNER_TEMP/network-anchor.parameters.json" \
+            --output none

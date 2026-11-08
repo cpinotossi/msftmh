@@ -1,4 +1,14 @@
-#  Challenge 6: Setup High Availability for Oracle ADB
+---
+title: Archived ADB high availability extension
+description: Legacy ADB availability notes, not a Base Database or RAC configuration.
+---
+
+## Archived ADB high availability extension
+
+> [!WARNING]
+> This ADB exercise does not configure Base Database availability or RAC.
+> The [current workshop](../../README.md) uses disposable single-node DB systems
+> without a production high availability design.
 
 [Back to workspace README](../../README.md)
 

@@ -1,0 +1,51 @@
+name: 07 - Deploy Oracle DNS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: workshop-stage-07-oracle-dns
+  cancel-in-progress: false
+
+jobs:
+  oracle:
+    uses: ./.github/workflows/odaa-require-oracle-subscription.yml
+  dns:
+    needs: oracle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and Check Static Oracle DNS Configuration
+        run: |
+          az bicep build-params --file infra/deployments/07-oracle-dns.bicepparam \
+            --outfile "$RUNNER_TEMP/oracle-dns.parameters.json"
+          python3 -c '
+          import ipaddress, json, os, re
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "oracle-dns.parameters.json")) as source:
+              parameters = json.load(source)["parameters"]
+          domain = parameters["oracleDnsDomain"]["value"]
+          if not domain.endswith(".") or len(domain) > 254 or not all(
+              re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
+              for label in domain[:-1].split(".")):
+              raise SystemExit("Fill the actual Oracle DNS domain including its trailing dot")
+          address = ipaddress.ip_address(parameters["oracleDnsListeningIp"]["value"])
+          if address.version != 4 or not address.is_private:
+              raise SystemExit("Fill the actual anchor DNS listening private IPv4 address")
+          '
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: '8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5'
+          subscription-id: 'aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483'
+      - name: Deploy Oracle DNS Only
+        run: |
+          az deployment group create --name workshop-07-oracle-dns \
+            --resource-group rg-workshop-hub \
+            --subscription aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483 \
+            --template-file infra/deployments/07-oracle-dns.bicep \
+            --parameters @"$RUNNER_TEMP/oracle-dns.parameters.json" \
+            --output none

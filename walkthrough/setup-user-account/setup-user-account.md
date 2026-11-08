@@ -1,113 +1,64 @@
-# Challenge: Setup your User Account on Azure
+---
+title: Set up your workshop account
+description: Sign in with your assigned mhuser identity, register MFA and verify isolated resource access.
+---
 
-[Back to workspace README](../../README.md)
+## Challenge 0: Set up your account
 
-In the following section you will cover two task.
+[Back to the workshop](../../README.md)
 
-- To access via Multi factor authentication
-- First check resource groups and roles are available
+The workshop has exactly seven identities, `mhuser1` through `mhuser7`, in
+tenant `8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5`. Use your organizer-provided UPN
+and initial password, not an account from the previous workshop tenant.
 
-## Open a Browser with a new Incognito/Private window or Profile.
+## Sign in and register MFA
 
-### Method 1 - Use your preferred browser
+1. Open a private browser window or a separate browser profile.
+2. Sign in to the [Azure portal](https://portal.azure.com/) using your assigned
+   account, for example `mhuser1@mngenvmcap956455.onmicrosoft.com`.
+3. Change the initial password when prompted.
+4. Complete the tenant's MFA registration prompts. Use
+   [Microsoft's MFA guide](https://learn.microsoft.com/entra/identity/authentication/tutorial-enable-azure-mfa)
+   if you need help.
+5. Verify the selected directory is the new workshop tenant.
 
-- a. EDGE - Open a new private window 
-- b. Chrome - Open a new incognito window
+Do not share your password, MFA registration information or session tokens.
 
-### Method 2 - Create a new user profile in your browser
+## Verify your access
 
-  * Example with EDGE
+For `mhuser1`, expect the following. Replace `1` with your assigned number.
 
-Open your browser and click on your work icon in the upper right corner.
+| Resource / scope | Access |
+|------------------|--------|
+| Workshop `rg-vm-mhuser1` | Contributor, without role-assignment rights |
+| Your `vm-mhuser1` | Virtual Machine User Login |
+| Workshop `rg-workshop-hub` | Reader only |
+| Workshop `rg-workshop-images` | Reader only |
+| ODAA `rg-odaa-mhuser1` after Phase B | Restricted BaseDB creator role |
+| Shared Oracle infrastructure after Phase B | Reader and required catalog-read actions |
 
-![Create browser profile](../../media/create_browser_profile.png)
+The hub and all VM spokes are in workshop subscription
+`aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483`. Oracle resources are in
+`4ce5b5cc-e869-451f-98fc-f50448849ee0`.
 
+You may inspect firewall, DNS resolver, routing and central DNS settings to
+learn the architecture. You cannot modify shared resources or another
+participant's spoke. Report missing access to the organizer; do not request
+Owner or subscription-wide Contributor as a workaround.
 
-### Login the Azure portal
+## Connect to your VM
 
-Login to the Azure portal by calling the URL https://portal.azure.com in the browser window of the new created profile and use the provided credentials you got at the beginning of the Microhack. Following an example of the credential you should got:
+After the organizer confirms the image and VM deployments are complete:
 
-~~~json
-         "user02": [
-        {
-          "user_principal_name": "user02@cptazure.org",
-          "display_name": "Bruce Wayne",
-          "initial_password": <"Assigned Password">
-        }
-      ],
-~~~
+```bash
+az login --tenant 8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5
+az network bastion ssh \
+  --subscription aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483 \
+  --name bas-workshop-hub \
+  --resource-group rg-workshop-hub \
+  --target-resource-id /subscriptions/aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483/resourceGroups/rg-vm-mhuser1/providers/Microsoft.Compute/virtualMachines/vm-mhuser1 \
+  --auth-type AAD
+```
 
-### Create MFA authentication when prompted.
-
-<b>Important:</b> For the Multi-Factor Authentication you have to download first the Microsoft Authenticator if you don't have the App yet on your mobile phone.
-
-Following you see the step of a MFA authentication. If you have any additional question check the available online resources under [MFA](https://learn.microsoft.com/en-us/entra/identity/authentication/tutorial-enable-azure-mfa)
-
-1. After you have open the first time the URL [Azure Portal](https://portal.azure.com/) you are forwarded to enable the MFA to access your Azure subscription. The following pictures will guide you through the process visually.
-
-    1. Press next to follow the authentication process.
-
-       ![MFA setup start](../../media/MFA.png)
-    
-    2. Press in the opened Authenticator app on the upper right + symbol and choose a new "work or school account". In the following menue choose "Scan QR code".
-
-       ![Authenticator app setup](../../media/MFA1.png)
-
-    3. After you have registered the new account you will asked to verify the registration by a sent random number to typ in the authenticator app.
-
-       ![Verify registration](../../media/MFA3.png)
-
-    4. The registration process for the MFA should be successful done.
-
-       ![Registration successful](../../media/MFA4.png)
-
-    5. Congratulations you have an established MFA authentication
-
-       ![MFA established](../../media/MFA5.png)
-
-    6. Finally you have to update the pre assigned password.
-
-       ![Update password](../../media/MFA6.png)
-
-    7. Now, you are logged in the Azure Portal
-
-       ![Logged in](../../media/ENDE%20MFA.png)
-
-A first important step is successfully finished!
-
-### First check resource groups and roles are available
-
-After you successfully logged into the Azure portal a first check could be the verification of the required resource groups for the Microhack.
-
-#### Move to the resource group in the Azure portal or search for the name in the top search bar
-
-![find azure resource group](media/find_resource_group.png)
-
-#### Two resource groups are required for this Microhack: "rg-odaa-shared" and "rg-vm-[your user number]"
-
-![see your azure resource group](media/resource_group_list.png)
-
-#### Your Resources
-
-It should look similar to this for Resource Group rg-odaa-shared.
-
-> **Note:** The screenshot below shows the initial deployment state. Additional resources will be provisioned as you progress through the subsequent challenges of this Microhack.
-
-![see your azure resource group](media/odaa_user_resources.png)
-
-### Verify your assigned roles
-
-To confirm your roles, navigate to each resource group and check **Access control (IAM)** → **View my access**:
-
-| Resource Group | Expected Roles |
-|---------------|---------------|
-| **rg-vm-userXX** | Reader, Virtual Machine User Login, Private DNS Zone Contributor |
-| **rg-odaa-shared** | Oracle Database Creator (custom role via group membership) |
-
-> **Tip:** You can also verify via Azure CLI:
-> ```powershell
-> az role assignment list --assignee <your-user@cptazure.org> --all --query "[].{scope:scope, role:roleDefinitionName}" -o table
-> ```
-
- 
-[Back to workspace README](../../README.md)
+Use your own VM name and resource group. If only the spoke network exists
+because image/SKU capacity is pending, VM login is not ready yet.

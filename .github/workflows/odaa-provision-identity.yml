@@ -1,0 +1,14 @@
+# Create locally with a delegated administrator and a durable private export.
+# CI deliberately verifies only: no app-only creation or secret handoff.
+name: 01 - Verify Stateless Identity
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  identity:
+    uses: ./.github/workflows/odaa-read-identity.yml

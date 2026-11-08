@@ -1,9 +1,18 @@
-#  Challenge: Create Azure ODAA [Oracle Database@Azure] Service
+---
+title: Understand the Oracle Database@Azure subscription
+description: Review the subscription and cloud linkage used by the Base Database workshop.
+---
+
+## Challenge 1: Understand the ODAA subscription
 
 [Back to workspace README](../../README.md)
 
 > [!NOTE]
-> **This is a theoretical challenge only.** No action is required from participants aside from reading the content. The ODAA subscription has already been created for you to save time.
+> This is a theoretical challenge. The organizer purchases and activates one
+> OracleSubscription in `4ce5b5cc-e869-451f-98fc-f50448849ee0`; participants
+> do not make Marketplace purchases or modify it. Proceed to database creation
+> only when provisioning is `Succeeded` and the linked cloud account is
+> `Available`. Azure-only hub/spoke preparation can run while onboarding waits.
 
 ##  ODAA Main Components
 
@@ -19,7 +28,7 @@ flowchart TB
     subgraph Azure["Azure"]
         subgraph AzureSub["Azure Subscription"]
             subgraph ODAAS["ODAA Subscription<br/>(Container & Commercial Terms)"]
-                DB1["Oracle Database Service 1<br/>(e.g., Autonomous DB)"]
+                DB1["Oracle Database Service 1<br/>(Base Database)"]
                 DB2["Oracle Database Service 2<br/>(e.g., Exadata DB)"]
                 DB3["Oracle Database Service N"]
             end
@@ -51,9 +60,11 @@ This can be done by following the instructions in
 * [Network planning for Oracle Database@Azure](https://learn.microsoft.com/en-us/azure/oracle/oracle-db/oracle-database-network-plan)
 
 
-The enablement of the enhanced networking capabilities will be a default behavior shortly. Because it is not yet the case you can check if the Azure resource providers are enabled by using the Azure Portal or the Azure CLI. Because the settings need to be done on subscription level the providers are all enabled. Following we quickly described how to check the status via the Azure Portal.
+The organizer checks provider registration at subscription scope. Participants
+can inspect it using their Reader permissions but must not register providers
+or change shared networking.
 
-1. Go the subscription where the ODAA is deployed. In our case the subscription has the name - sub-mhodaa.
+1. Open ODAA subscription `4ce5b5cc-e869-451f-98fc-f50448849ee0`.
 2. In the subscription view you find under the menu setting the sub menue Resource Providers.
 3. Click on the Resource Providers and search for the Providers
 ![Overview Resource Providers](media/resource_provider.jpg)
@@ -76,7 +87,9 @@ The Marketplace offers two purchasing options:
 1. Public offer, available to all Azure customers
 2. Private offer, available only to enterprise customers who have negotiated specific terms with Oracle
 
->  **IMPORTANT**: In this Microhack the ODAA Subscription has been already purchased via a Public Offer.
+> [!IMPORTANT]
+> This workshop uses the public PAYG offer. A purchase or a resource in
+> `Accepted` state is not proof that onboarding is complete.
 
 ##  Purchase ODAA Subscription via Public Offer
 

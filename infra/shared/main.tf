@@ -30,15 +30,15 @@ resource "azurerm_shared_image_gallery" "gallery" {
 }
 
 resource "azurerm_shared_image" "oracle_workshop" {
-  provider                  = azurerm.mhcore
-  name                      = var.image_name
-  gallery_name              = azurerm_shared_image_gallery.gallery.name
-  resource_group_name       = azurerm_resource_group.shared.name
-  location                  = azurerm_resource_group.shared.location
-  os_type                   = "Linux"
-  hyper_v_generation        = "V2"
-  architecture              = "x64"
-  trusted_launch_supported  = true
+  provider                 = azurerm.mhcore
+  name                     = var.image_name
+  gallery_name             = azurerm_shared_image_gallery.gallery.name
+  resource_group_name      = azurerm_resource_group.shared.name
+  location                 = azurerm_resource_group.shared.location
+  os_type                  = "Linux"
+  hyper_v_generation       = "V2"
+  architecture             = "x64"
+  trusted_launch_supported = true
 
   identifier {
     publisher = "OracleWorkshop"
@@ -76,7 +76,7 @@ resource "azurerm_subnet" "shared_odaa" {
   virtual_network_name = azurerm_virtual_network.shared_odaa.name
   address_prefixes     = [cidrsubnet(var.odaa_vnet_cidr, 8, 0)]
 
-  default_outbound_access_enabled = true
+  default_outbound_access_enabled = false
 
   delegation {
     name = "oracle-delegation"
@@ -106,34 +106,28 @@ resource "azapi_resource" "resource_anchor" {
 }
 
 # ===============================================================================
-# CUSTOM ROLE: Oracle Database Creator (least-privilege for ADB + BaseDB)
+# CUSTOM ROLE: BaseDB resources only, assigned to each participant's own RG
 # ===============================================================================
-
-import {
-  to = azurerm_role_definition.odaa_db_creator
-  id = "/subscriptions/${var.mhodaa_subscription_id}/providers/Microsoft.Authorization/roleDefinitions/c02191a8-7480-6430-d9fc-2d006164a261|/subscriptions/${var.mhodaa_subscription_id}"
-}
 
 resource "azurerm_role_definition" "odaa_db_creator" {
   provider = azurerm.mhodaa
 
   name        = "Oracle Database Creator"
   scope       = "/subscriptions/${var.mhodaa_subscription_id}"
-  description = "Allows creating and managing Oracle ADB and BaseDB resources, and using existing VNets/Subnets. Workshop least-privilege role."
+  description = "Manage assigned BaseDB resources without changing shared anchors, networking or the Oracle subscription."
 
   permissions {
     actions = [
-      # Oracle Database@Azure - full access
-      "Oracle.Database/*",
+      "Oracle.Database/dbSystems/*",
+      "Oracle.Database/dbNodes/*",
+      "Oracle.Database/dbSystemShapes/read",
+      "Oracle.Database/dbSystemDbVersions/read",
 
       # Network - read + join (use existing shared VNet/Subnet)
       "Microsoft.Network/virtualNetworks/read",
       "Microsoft.Network/virtualNetworks/subnets/read",
       "Microsoft.Network/virtualNetworks/subnets/join/action",
       "Microsoft.Network/networkInterfaces/read",
-      "Microsoft.Network/networkInterfaces/write",
-      "Microsoft.Network/networkInterfaces/delete",
-      "Microsoft.Network/networkInterfaces/join/action",
 
       # Portal creates ARM deployments behind the scenes
       "Microsoft.Resources/deployments/*",
@@ -150,19 +144,58 @@ resource "azurerm_role_definition" "odaa_db_creator" {
 }
 
 # ===============================================================================
-# RBAC: User group gets Oracle Database Creator on ODAA subscription
+# RBAC: Shared ODAA infrastructure is visible, never participant-writable
 # ===============================================================================
-# Scope must be subscription-level because the Portal Create wizard calls
-# subscription-level APIs (e.g. listCloudAccountDetails, oracleSubscriptions).
-# A resource-group-scoped assignment causes 403 on those calls.
 # ===============================================================================
 
 resource "azurerm_role_assignment" "shared_odaa_group" {
+  provider             = azurerm.mhodaa
+  scope                = "/subscriptions/${var.mhodaa_subscription_id}"
+  role_definition_name = "Reader"
+  principal_id         = local.workshop_group_id
+  description          = "View Oracle resources and shared anchors without modifying them"
+}
+
+resource "azurerm_role_definition" "odaa_catalog_reader" {
+  provider    = azurerm.mhodaa
+  name        = "Oracle Workshop Catalog Reader"
+  scope       = "/subscriptions/${var.mhodaa_subscription_id}"
+  description = "Read Oracle onboarding details used by the portal without buying or changing the subscription"
+  permissions {
+    actions = [
+      "Oracle.Database/oracleSubscriptions/listCloudAccountDetails/action",
+      "Oracle.Database/oracleSubscriptions/listSaasSubscriptionDetails/action",
+    ]
+  }
+  assignable_scopes = ["/subscriptions/${var.mhodaa_subscription_id}"]
+}
+
+resource "azurerm_role_assignment" "odaa_catalog_reader" {
   provider           = azurerm.mhodaa
   scope              = "/subscriptions/${var.mhodaa_subscription_id}"
-  role_definition_id = azurerm_role_definition.odaa_db_creator.role_definition_resource_id
-  principal_id       = var.odaa_user_group_id
-  description        = "Allows workshop user group to create Oracle DBs and use shared VNet"
+  role_definition_id = azurerm_role_definition.odaa_catalog_reader.role_definition_resource_id
+  principal_id       = local.workshop_group_id
+}
+
+resource "azurerm_role_definition" "odaa_subnet_joiner" {
+  provider    = azurerm.mhodaa
+  name        = "Oracle Workshop Subnet Joiner"
+  scope       = "/subscriptions/${var.mhodaa_subscription_id}"
+  description = "Use the assigned Oracle subnet without modifying its networking"
+  permissions {
+    actions = [
+      "Microsoft.Network/virtualNetworks/subnets/read",
+      "Microsoft.Network/virtualNetworks/subnets/join/action",
+    ]
+  }
+  assignable_scopes = ["/subscriptions/${var.mhodaa_subscription_id}"]
+}
+
+resource "azurerm_role_assignment" "odaa_subnet_joiner" {
+  provider           = azurerm.mhodaa
+  scope              = azurerm_subnet.shared_odaa.id
+  role_definition_id = azurerm_role_definition.odaa_subnet_joiner.role_definition_resource_id
+  principal_id       = local.workshop_group_id
 }
 
 # ===============================================================================

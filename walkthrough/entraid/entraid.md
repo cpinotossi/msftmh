@@ -1,4 +1,15 @@
-#  Enable Microsoft Entra ID Authentication on Autonomous AI Database
+---
+title: Archived Autonomous Database Entra ID extension
+description: Legacy ADB authentication notes, outside the Base Database workshop.
+---
+
+## Archived Autonomous Database Entra ID extension
+
+> [!WARNING]
+> These legacy ADB instructions are not a Base Database SSO solution and are
+> outside the current workshop. Base Database token authentication requires a
+> separately designed TLS and database authentication configuration.
+> Start with the [Base Database workshop](../../README.md).
 
 [Back to workspace README](../../README.md)
 

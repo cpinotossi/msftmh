@@ -24,7 +24,7 @@
 
 param (
     [Parameter()]
-    [string]$Version = "1.0.0",
+    [string]$Version = "1.1.0",
     
     [Parameter()]
     [switch]$Validate,
@@ -40,7 +40,6 @@ $ErrorActionPreference = "Stop"
 # =============================================================================
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$PackerFile = Join-Path $ScriptDir "oracle-workshop.pkr.hcl"
 $VarsFile = Join-Path $ScriptDir "variables.auto.pkrvars.hcl"
 $VarsExample = Join-Path $ScriptDir "variables.pkrvars.hcl.example"
 
@@ -65,20 +64,14 @@ if (-not $packer) {
 }
 
 $packerVersion = & packer version
+if ($packerVersion -notmatch 'Packer v([0-9]+\.[0-9]+\.[0-9]+)' -or
+    [version]$matches[1] -lt [version]'1.16.2') {
+    throw "Install Packer 1.16.2 or newer; older installers cannot fetch the pinned Azure plugin from HashiCorp releases."
+}
 Write-Host "  Packer: $packerVersion" -ForegroundColor Green
 
-# Check Ansible
-$ansible = Get-Command ansible -ErrorAction SilentlyContinue
-if (-not $ansible) {
-    Write-Host "ERROR: Ansible not found locally." -ForegroundColor Red
-    Write-Host "  This Packer template uses the Ansible provisioner, which requires 'ansible-playbook' on the build machine." -ForegroundColor Yellow
-    Write-Host "  Recommended: install WSL2 + Ansible, then run this script from a shell where 'ansible-playbook' is on PATH." -ForegroundColor Yellow
-    exit 1
-}
-else {
-    $ansibleVersion = & ansible --version | Select-Object -First 1
-    Write-Host "  Ansible: $ansibleVersion" -ForegroundColor Green
-}
+# Ansible runs on the temporary build VM, not the local build machine.
+# Validation does not require Azure login; builds use the active Azure CLI session.
 
 # Check variables file
 if (-not (Test-Path $VarsFile)) {
@@ -87,7 +80,7 @@ if (-not (Test-Path $VarsFile)) {
     Write-Host ""
     Write-Host "Please create it from the example:" -ForegroundColor Yellow
     Write-Host "  Copy-Item '$VarsExample' '$VarsFile'" -ForegroundColor Cyan
-    Write-Host "  Then edit $VarsFile with your Azure credentials." -ForegroundColor Yellow
+    Write-Host "  Then review $VarsFile for the target subscription and gallery." -ForegroundColor Yellow
     exit 1
 }
 
@@ -120,7 +113,7 @@ Write-Host ""
 Write-Host "Validating Packer template..." -ForegroundColor Yellow
 Push-Location $ScriptDir
 try {
-    & packer validate -var "image_version=$Version" -var-file="$VarsFile" $PackerFile
+    & packer validate -var "image_version=$Version" .
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERROR: Packer validation failed" -ForegroundColor Red
         exit 1
@@ -150,6 +143,8 @@ Write-Host "  1. Create a temporary VM in Azure" -ForegroundColor White
 Write-Host "  2. Run Ansible to install Oracle tools" -ForegroundColor White
 Write-Host "  3. Generalize the VM" -ForegroundColor White
 Write-Host "  4. Capture to Azure Compute Gallery" -ForegroundColor White
+Write-Host "The gallery definition must already exist in rg-workshop-images (x64, Gen2, generalized)." -ForegroundColor Yellow
+Write-Host "The separate rg-packer-build resource group must already exist in France Central." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Estimated time: 15-25 minutes" -ForegroundColor Yellow
 Write-Host ""
@@ -164,18 +159,34 @@ Write-Host ""
 Write-Host "Starting build..." -ForegroundColor Green
 Write-Host ""
 
+if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
+    throw "Azure CLI is required for the build. Install it and run az login."
+}
+$account = & az account show -o json | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) {
+    throw "Azure CLI login is required before building."
+}
+if ($account.id -ne "aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483" -or
+    $account.tenantId -ne "8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5") {
+    throw "Select the approved workshop subscription and tenant before building."
+}
+
+$python = Get-Command python3 -ErrorAction Stop
+& $python.Source (Join-Path $ScriptDir "check_vm_prerequisites.py") build
+if ($LASTEXITCODE -ne 0) {
+    throw "The fixed v7/NVMe image prerequisites are not satisfied."
+}
+
 $buildArgs = @(
     "build"
     "-var", "image_version=$Version"
-    "-var-file=$VarsFile"
-    "-force"
 )
 
 if ($PackerDebug) {
     $buildArgs += "-debug"
 }
 
-$buildArgs += $PackerFile
+$buildArgs += "."
 
 Push-Location $ScriptDir
 try {

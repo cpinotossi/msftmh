@@ -1,4 +1,17 @@
-# GitHub Actions Self-Hosted Runner on Azure Container Apps
+---
+title: Historical Container Apps GitHub runner
+description: Retained reference for the retired Terraform-state runner deployment.
+---
+
+## Historical deployment only
+
+> [!WARNING]
+> This runner and its Terraform backend are not used by the current seven-user
+> workshop. Do not deploy them in the new tenant. Use the
+> [hosted-runner OIDC bootstrap](../deployments/README.md#github-oidc-bootstrap)
+> instead. No old infrastructure or state is deleted automatically.
+
+## GitHub Actions Self-Hosted Runner on Azure Container Apps
 
 This Terraform module deploys a self-hosted GitHub Actions runner infrastructure on Azure Container Apps. The runner automatically scales from 0 to N based on workflow triggers, providing cost-effective CI/CD for the Oracle on Azure workshop.
 

@@ -1,4 +1,14 @@
-#  Challenge 5: Review data replication via Beaver
+---
+title: Archived ADB CloudBeaver extension
+description: Legacy AKS and ADB integration notes, outside the Base Database workshop.
+---
+
+## Archived ADB CloudBeaver extension
+
+> [!WARNING]
+> This legacy AKS/ADB exercise is not part of the
+> [Base Database workshop](../../README.md). Its connection settings and
+> deployment assumptions have not been adapted or validated for Base Database.
 
 [Back to workspace README](../../README.md)
 

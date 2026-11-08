@@ -1,4 +1,15 @@
-# 🔄 Challenge 4: OnPrem ramp up
+---
+title: Archived ADB on-premises replication extension
+description: Legacy AKS, Data Pump and GoldenGate exercise targeting Autonomous Database.
+---
+
+## Archived ADB on-premises replication extension
+
+> [!WARNING]
+> This AKS/ADB replication exercise is outside the
+> [Base Database workshop](../../README.md). The current client environment uses
+> VMs, not AKS; these replication procedures are not a validated Base Database
+> migration path.
 
 [Back to workspace README](../../README.md)
 

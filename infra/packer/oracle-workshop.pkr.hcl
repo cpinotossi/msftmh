@@ -2,11 +2,10 @@
 # Packer Template - Oracle Workshop VM Image
 # ===============================================================================
 # Builds a Ubuntu 24.04 VM image with pre-installed Oracle tools via Ansible:
-# - Oracle Instant Client 23.5 + SQL*Plus
+# - Oracle Instant Client 23.26.4 + SQL*Plus
 # - Oracle SQLcl (SQL Developer Command Line)
 # - rwloadsim/connping
-# - adbping (Oracle ADB latency testing)
-# - Java 17 OpenJDK
+# - Java 21 OpenJDK
 # - Azure CLI
 # - OCI CLI
 #
@@ -21,11 +20,11 @@ packer {
   required_plugins {
     azure = {
       source  = "github.com/hashicorp/azure"
-      version = "~> 2"
+      version = "= 2.6.5"
     }
     ansible = {
       source  = "github.com/hashicorp/ansible"
-      version = "~> 1"
+      version = "= 1.1.3"
     }
   }
 }
@@ -36,6 +35,7 @@ packer {
 
 variable "subscription_id" {
   type        = string
+  default     = "aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483"
   description = "Azure Subscription ID"
 }
 
@@ -47,7 +47,7 @@ variable "location" {
 
 variable "resource_group" {
   type        = string
-  default     = "rg-shared-workshop"
+  default     = "rg-workshop-images"
   description = "Resource group containing the Compute Gallery"
 }
 
@@ -71,13 +71,13 @@ variable "image_name" {
 
 variable "image_version" {
   type        = string
-  default     = "1.0.0"
+  default     = "1.1.0"
   description = "Image version to create (semver format)"
 }
 
 variable "vm_size" {
   type        = string
-  default     = "Standard_D2s_v5"
+  default     = "Standard_D4as_v7"
   description = "VM size for building the image"
 }
 
@@ -91,13 +91,16 @@ source "azure-arm" "oracle-workshop" {
   subscription_id    = var.subscription_id
 
   # Build VM Configuration
-  vm_size = var.vm_size
+  vm_size              = var.vm_size
+  disk_controller_type = "NVMe"
+  public_ip_sku        = "Standard"
 
-  # Source Image - Ubuntu 24.04 LTS
+  # Source Image - Ubuntu 24.04 LTS x64, Hyper-V generation V2
   os_type         = "Linux"
   image_publisher = "Canonical"
   image_offer     = "ubuntu-24_04-lts"
   image_sku       = "server"
+  image_version   = "24.04.202610250"
 
   # Use a separate resource group for temporary build resources (pkr*)
   build_resource_group_name = var.build_resource_group
@@ -144,18 +147,11 @@ build {
       "echo '>>> Installing Ansible on build VM...'",
       "export DEBIAN_FRONTEND=noninteractive",
       "export NEEDRESTART_MODE=l",
+      "sudo cloud-init status --wait",
       "sudo apt-get update -qq",
-      "sudo apt-get install -y -qq software-properties-common",
-      "sudo add-apt-repository --yes --update ppa:ansible/ansible",
-      "sudo apt-get install -y -qq ansible",
+      "sudo apt-get install -y -qq ansible-core",
       "ansible --version",
     ]
-  }
-
-  # Upload adbping archive to the build VM
-  provisioner "file" {
-    source      = "${path.root}/files/adbping.zip"
-    destination = "/tmp/adbping.zip"
   }
 
   # Run the playbook locally on the VM (no SSH between tasks)
@@ -167,9 +163,20 @@ build {
     ]
   }
 
+  provisioner "shell" {
+    inline            = ["sudo reboot"]
+    expect_disconnect = true
+    pause_after       = "30s"
+  }
+
+  provisioner "shell" {
+    script          = "${path.root}/scripts/verify-nvme.sh"
+    execute_command = "chmod +x {{ .Path }}; {{ .Vars }} sudo -E /bin/sh -eu '{{ .Path }}'"
+  }
+
   # Final deprovision — runs over SSH as a separate step after Ansible
   provisioner "shell" {
-    execute_command = "chmod +x {{ .Path }}; {{ .Vars }} sudo -E sh '{{ .Path }}'"
+    execute_command = "chmod +x {{ .Path }}; {{ .Vars }} sudo -E /bin/sh -eu '{{ .Path }}'"
     inline = [
       "echo '>>> Generalizing image...'",
       "rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub",
@@ -177,8 +184,7 @@ build {
       "rm -f /var/lib/dbus/machine-id",
       "ln -sf /etc/machine-id /var/lib/dbus/machine-id",
       "find /var/log -type f -exec truncate -s 0 {} \\; 2>/dev/null || true",
-      "cloud-init clean --logs 2>/dev/null || true",
-      "rm -rf /tmp/* /var/tmp/* 2>/dev/null || true",
+      "cloud-init clean --logs",
       "rm -f /home/*/.bash_history /root/.bash_history 2>/dev/null || true",
       "/usr/sbin/waagent -force -deprovision+user",
       "export HISTSIZE=0",

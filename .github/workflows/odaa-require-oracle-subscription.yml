@@ -1,0 +1,40 @@
+# All Phase-B deployment jobs must depend on this fail-closed, read-only gate.
+name: Require Oracle Subscription
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  ready:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: '8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5'
+          subscription-id: '4ce5b5cc-e869-451f-98fc-f50448849ee0'
+      - name: RequireOracleSubscription
+        run: |
+          response="$(az rest --method GET \
+            --url 'https://management.azure.com/subscriptions/4ce5b5cc-e869-451f-98fc-f50448849ee0/providers/Oracle.Database/oracleSubscriptions?api-version=2025-09-01' \
+            --output json)"
+          export ORACLE_SUBSCRIPTION_RESPONSE="$response"
+          python3 -c '
+          import json, os
+          response = json.loads(os.environ["ORACLE_SUBSCRIPTION_RESPONSE"])
+          resources = response.get("value", [])
+          if response.get("nextLink") or len(resources) != 1:
+              raise SystemExit("RequireOracleSubscription: expected exactly one Oracle subscription")
+          resource = resources[0]
+          prefix = "/subscriptions/4ce5b5cc-e869-451f-98fc-f50448849ee0/providers/oracle.database/oraclesubscriptions/"
+          if not resource.get("id", "").lower().startswith(prefix):
+              raise SystemExit("RequireOracleSubscription: wrong Azure subscription")
+          properties = resource.get("properties", {})
+          if properties.get("provisioningState") != "Succeeded" or properties.get("cloudAccountState") != "Available":
+              raise SystemExit("RequireOracleSubscription: provision must be Succeeded and cloud account Available; no Phase-B writes allowed")
+          print("RequireOracleSubscription passed")
+          '

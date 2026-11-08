@@ -1,4 +1,13 @@
-#  Challenge 8: (Optional) Integration of Azure Data Fabric with Oracle ADB
+---
+title: Archived ADB Fabric extension
+description: Legacy Autonomous Database integration notes, outside the Base Database workshop.
+---
+
+## Archived ADB Fabric extension
+
+> [!WARNING]
+> This optional ADB exercise has not been validated for Base Database.
+> It is not part of the [current workshop](../../README.md).
 
 [Back to workspace README](../../README.md)
 

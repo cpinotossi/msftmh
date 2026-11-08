@@ -1,26 +1,35 @@
 # Build Oracle Workshop VM Image using Packer
-# Publishes to Azure Compute Gallery for use by deploy-workshop
+# Publishes to Azure Compute Gallery for the independent user-VM deployment.
 name: 0 - Build Image
 
 on:
   workflow_dispatch:
     inputs:
       image_version:
-        description: 'Image version (semver, e.g. 1.0.1)'
+        description: 'Fresh image version (semver)'
         required: true
-        default: '1.0.1'
+        default: '1.1.0'
 
 concurrency:
   group: build-image
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  id-token: write
+
 env:
   PACKER_DIR: 'infra/packer'
-  PACKER_VERSION: '1.11.2'
+  PACKER_VERSION: '1.16.2'
+  WORKSHOP_SUBSCRIPTION_ID: 'aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483'
+  ARM_TENANT_ID: '8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5'
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  IMAGE_RESOURCE_GROUP: 'rg-workshop-images'
+  IMAGE_VERSION: ${{ inputs.image_version }}
 
 jobs:
   build:
-    runs-on: [self-hosted, azure, container-apps, terraform]
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ${{ env.PACKER_DIR }}
@@ -35,24 +44,45 @@ jobs:
       - name: Install Packer
         run: |
           cd /tmp
-          curl -sLO "https://releases.hashicorp.com/packer/$PACKER_VERSION/packer_${PACKER_VERSION}_linux_amd64.zip"
-          unzip -o packer_${PACKER_VERSION}_linux_amd64.zip
+          curl -fSLO "https://releases.hashicorp.com/packer/$PACKER_VERSION/packer_${PACKER_VERSION}_linux_amd64.zip"
+          printf '%s  %s\n' \
+            'abbfe0cf74985084112659b53e3565f264f70a20914c3b7c4f789f54f61c2414' \
+            "packer_${PACKER_VERSION}_linux_amd64.zip" | sha256sum -c -
+          unzip -o "packer_${PACKER_VERSION}_linux_amd64.zip"
           sudo mv packer /usr/local/bin/
           packer version
 
-      - name: Azure Login
+      - name: Azure OIDC Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          subscription-id: ${{ env.WORKSHOP_SUBSCRIPTION_ID }}
+
+      - name: Check target and image prerequisites
         run: |
-          az login --identity --client-id $ARM_CLIENT_ID --allow-no-subscriptions
-          az account set --subscription ${{ vars.TF_MHCORE_SUBSCRIPTION_ID }}
-          echo "Logged in, subscription: $(az account show --query '{name:name, id:id}' -o json)"
+          test "$(az account show --query id -o tsv)" = "$WORKSHOP_SUBSCRIPTION_ID"
+          test "$(az account show --query tenantId -o tsv)" = "$ARM_TENANT_ID"
+          [[ "$IMAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(az sig image-definition show \
+            --resource-group "$IMAGE_RESOURCE_GROUP" \
+            --gallery-name gal_oracle_workshop \
+            --gallery-image-definition oracle-workshop-vm \
+            --query hyperVGeneration -o tsv)" = V2
+          python3 check_vm_prerequisites.py build
+          existing="$(az sig image-version list --resource-group "$IMAGE_RESOURCE_GROUP" \
+            --gallery-name gal_oracle_workshop --gallery-image-definition oracle-workshop-vm \
+            --query "[?name=='$IMAGE_VERSION'] | length(@)" -o tsv)"
+          [[ "$existing" == 0 ]] ||
+            { echo 'Image version already exists; choose a fresh version. No build VM created.'; exit 1; }
 
       - name: Ensure Build Resource Group
         run: |
           az group create \
             --name rg-packer-build \
             --location francecentral \
-            --subscription ${{ vars.TF_MHCORE_SUBSCRIPTION_ID }} \
-            --tags Purpose=PackerBuild ManagedBy=CI 2>/dev/null || true
+            --subscription "$WORKSHOP_SUBSCRIPTION_ID" \
+            --tags Purpose=PackerBuild ManagedBy=CI
 
       - name: Packer Init
         run: packer init .
@@ -60,30 +90,35 @@ jobs:
       - name: Packer Validate
         run: |
           packer validate \
-            -var "subscription_id=${{ vars.TF_MHCORE_SUBSCRIPTION_ID }}" \
-            -var "image_version=${{ github.event.inputs.image_version }}" \
+            -var "subscription_id=$WORKSHOP_SUBSCRIPTION_ID" \
+            -var "resource_group=$IMAGE_RESOURCE_GROUP" \
+            -var "image_version=$IMAGE_VERSION" \
             .
 
       - name: Packer Build
         run: |
           packer build \
-            -var "subscription_id=${{ vars.TF_MHCORE_SUBSCRIPTION_ID }}" \
-            -var "image_version=${{ github.event.inputs.image_version }}" \
+            -var "subscription_id=$WORKSHOP_SUBSCRIPTION_ID" \
+            -var "resource_group=$IMAGE_RESOURCE_GROUP" \
+            -var "image_version=$IMAGE_VERSION" \
             -color=false \
             .
 
       - name: Summary
         if: always()
         run: |
-          echo "## 🖼️ Image Build" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ github.event.inputs.image_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Gallery**: gal_oracle_workshop" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image**: oracle-workshop-vm" >> $GITHUB_STEP_SUMMARY
-          if [ -f packer-manifest.json ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Manifest" >> $GITHUB_STEP_SUMMARY
-            echo '```json' >> $GITHUB_STEP_SUMMARY
-            cat packer-manifest.json >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
+          {
+            echo "## 🖼️ Image Build"
+            echo ""
+            echo "- Version: $IMAGE_VERSION"
+            echo "- Resource group: $IMAGE_RESOURCE_GROUP"
+            echo "- Gallery: gal_oracle_workshop"
+            echo "- Image: oracle-workshop-vm"
+            if [ -f packer-manifest.json ]; then
+              echo ""
+              echo "### Manifest"
+              echo '```json'
+              cat packer-manifest.json
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

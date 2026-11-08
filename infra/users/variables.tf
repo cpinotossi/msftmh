@@ -9,6 +9,7 @@
 variable "tenant_id" {
   description = "Azure AD tenant ID"
   type        = string
+  default     = "8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5"
 }
 
 # ===============================================================================
@@ -16,13 +17,21 @@ variable "tenant_id" {
 # ===============================================================================
 
 variable "mh0_subscription_id" {
-  description = "Azure subscription ID for Workshop VMs, VNets, DNS (sub-mh0)"
+  description = "Single workshop subscription shared by the hub and all user spokes"
   type        = string
+  default     = "aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483"
 }
 
 variable "mhodaa_subscription_id" {
-  description = "Azure subscription ID for ODAA user RGs, peering (sub-mhodaa)"
+  description = "Separate subscription for Oracle resources only"
   type        = string
+  default     = "4ce5b5cc-e869-451f-98fc-f50448849ee0"
+}
+
+variable "use_msi" {
+  description = "Use managed identity in CI; false uses Azure CLI authentication"
+  type        = bool
+  default     = false
 }
 
 # ===============================================================================
@@ -73,11 +82,11 @@ variable "location" {
 variable "user_count" {
   description = "Number of workshop users to create (0-25)"
   type        = number
-  default     = 3
+  default     = 7
 
   validation {
-    condition     = var.user_count >= 0 && var.user_count <= 25
-    error_message = "user_count must be between 0 and 25."
+    condition     = var.user_count >= 0 && var.user_count <= 25 && floor(var.user_count) == var.user_count
+    error_message = "user_count must be an integer between 0 and 25."
   }
 }
 
@@ -115,44 +124,9 @@ variable "vm_image_version" {
   default     = null
 }
 
-variable "create_public_ip" {
-  description = "Create public IPs for VMs (for direct SSH access)"
-  type        = bool
-  default     = false
-}
-
-variable "enable_bastion" {
-  description = "Create Azure Bastion for each user VM VNet"
-  type        = bool
-  default     = true
-}
-
-variable "bastion_sku" {
-  description = "Azure Bastion SKU"
-  type        = string
-  default     = "Basic"
-
-  validation {
-    condition     = contains(["Basic", "Standard", "Premium"], var.bastion_sku)
-    error_message = "bastion_sku must be one of: Basic, Standard, Premium."
-  }
-}
-
-variable "enable_nat_gateway" {
-  description = "Create a NAT Gateway per user VM VNet for outbound internet access"
-  type        = bool
-  default     = false
-}
-
 # ===============================================================================
 # ODAA Configuration
 # ===============================================================================
-
-variable "odaa_dns_zone_name" {
-  description = "Private DNS zone name for Oracle ODAA"
-  type        = string
-  default     = "adb.eu-paris-1.oraclecloud.com"
-}
 
 # ===============================================================================
 # Entra ID Login Configuration
@@ -168,12 +142,6 @@ variable "entra_id_admin_login" {
   description = "Grant admin (sudo) access to Entra ID users"
   type        = bool
   default     = false
-}
-
-variable "user_object_ids" {
-  description = "Map of user index to Entra ID user object ID"
-  type        = map(string)
-  default     = {}
 }
 
 # ===============================================================================

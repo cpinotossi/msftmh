@@ -1,4 +1,14 @@
-#  Challenge 7: (Optional) Use Estate Explorer to visualize the Oracle ADB instance
+---
+title: Archived ADB Estate Explorer extension
+description: Legacy ADB visualization notes, outside the Base Database workshop.
+---
+
+## Archived ADB Estate Explorer extension
+
+> [!WARNING]
+> This optional ADB exercise is not part of the
+> [Base Database workshop](../../README.md). Do not apply its Autonomous Database
+> deployment and connection settings to the workshop DB system.
 
 [Back to workspace README](../../README.md)
 

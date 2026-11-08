@@ -1,150 +1,170 @@
-# Identity Management (Terraform)
+---
+title: Stateless workshop identity
+description: Exactly seven fixed Entra users and one group through a transparent Graph script
+---
 
-This folder contains a **separate Terraform configuration** for managing Entra ID users
-and group memberships independently from the main infrastructure.
+## Supported mode and Bicep limitation
 
-## Design Principles
+All Azure infrastructure uses Bicep. Identity creation is the necessary
+exception: the official [Microsoft.Graph/users reference](https://learn.microsoft.com/en-us/graph/templates/bicep/reference/users?view=graph-bicep-1.0)
+supports only read-only `existing` users, not user creation or password profiles.
+The Graph Bicep extension therefore cannot provision these participants.
 
-1. **Create Once** - Users and group memberships are created once and never modified
-2. **Password Rotation Only** - After initial creation, only passwords can be rotated
-3. **Single Output File** - `user_credentials.json` contains both object IDs and passwords
-4. **No Race Conditions** - `ignore_changes = all` prevents Azure AD eventual consistency issues
+`provision.ps1` uses Azure CLI authentication and Microsoft Graph v1.0 directly.
+There is no Terraform, backend, storage access, deployment script, privileged
+managed identity, or persistent infrastructure state. Directory lookups are
+authoritative; the private JSON file is a credential export, not state.
+Do not change or bypass the organization's storage network policy.
 
-## How It Works
+Creation requires a delegated Azure CLI administrator session. Graph v1.0
+[does not reliably list service-principal group owners](https://learn.microsoft.com/en-us/graph/api/group-list-owners?view=graph-rest-1.0),
+so app-only creation is deliberately rejected rather than weakening ownership
+checks. CI uses OIDC for read-only verification of identities created locally.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  INITIAL DEPLOYMENT (run once)                                  │
-├─────────────────────────────────────────────────────────────────┤
-│  1. azuread_user - Creates users with initial password          │
-│  2. time_sleep - Waits for Azure AD propagation (90s)           │
-│  3. azuread_group_member - Adds users to security group         │
-│  4. local_file - Exports user_credentials.json                  │
-│                                                                 │
-│  After this, azuread_user and azuread_group_member have         │
-│  ignore_changes = all, so they're never touched again.          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  PASSWORD ROTATION (run before each event)                      │
-├─────────────────────────────────────────────────────────────────┤
-│  1. random_password - Generates new passwords (keeper trigger)  │
-│  2. null_resource - Calls `az ad user update --password`        │
-│  3. local_file - Updates user_credentials.json                  │
-│                                                                 │
-│  The azuread_user resource is NOT modified - password update    │
-│  happens via Azure CLI local-exec, avoiding race conditions.    │
-└─────────────────────────────────────────────────────────────────┘
-```
+## Fixed roster
 
-## Output File Format
+* Tenant: `8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5`
+* Verified domain: `mngenvmcap956455.onmicrosoft.com`
+* Participants: exactly `mhuser1` through `mhuser7`
+* Participant keys: `"01"` through `"07"`
+* Group: `mh-workshop-participants`
 
-`user_credentials.json` (single consolidated file):
+No tenant, domain, count, user-name, or group-name options exist. The only
+arguments are the mandatory private `OutputFile` and optional `ReadOnly`.
+Use PowerShell 7.3 or later on Linux or macOS.
 
-```json
-{
-  "generated_at": "2025-11-29T10:00:00Z",
-  "password_rotation_trigger": "event-december-2025",
-  "microhack_event_name": "mh2025muc",
-  "user_count": 20,
-  "group": {
-    "object_id": "5fbc2654-d343-401a-be86-08327fe66ec2",
-    "display_name": "mh-odaa-user-grp"
-  },
-  "users": {
-    "user00": {
-      "object_id": "abc12345-...",
-      "user_principal_name": "user00@cptazure.org",
-      "display_name": "Peter Parker",
-      "password": "xK9mNp2qR4"
-    },
-    "user01": { ... }
-  }
-}
+## Local creation command
+
+Use the Azure CLI session signed into the fixed tenant with an active Global
+Administrator role. User Administrator is ordinarily sufficient for these
+non-admin users and their ordinary security group. Global Administrator does
+not grant Azure RBAC, but this script needs no Azure resource or storage role.
+
+If necessary, sign in explicitly:
+
+```bash
+az login --tenant 8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5 --allow-no-subscriptions
 ```
 
-## Workflow
+Create a private directory and provision the fixed identities:
 
-### 1. Initial Setup (Run Once)
-
-```powershell
-cd identity
-terraform init
-terraform apply
+```bash
+install -d -m 700 "$HOME/.workshop-secrets"
+pwsh -NoProfile -File infra/identity/provision.ps1 \
+  -OutputFile "$HOME/.workshop-secrets/user_credentials.json"
 ```
 
-This creates:
-- Users (user00 through userN)
-- Group membership in `mh-odaa-user-grp`
-- Exports `user_credentials.json`
+The script acquires a Graph token without printing it. It checks the Azure CLI
+tenant and token tenant, then validates existing groups and all seven UPNs
+before any directory mutation. API failures stop execution with sanitized
+errors. Actual delegated Graph permissions must be checked during the
+explicitly authorized run; no identity creation is performed by offline tests.
 
-### 2. Deploy Main Infrastructure
+## Ownership and reruns
 
-```powershell
-cd ..  # Back to main terraform folder
-terraform apply -var="use_external_identity=true"
+New groups are owned by the signed-in administrator and marked with:
+
+```text
+msftmh fixed seven workshop participants; tenant 8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5
 ```
 
-The main configuration reads `identity/user_credentials.json` for object IDs.
+An existing group must have that description, be an ordinary security group,
+have verifiable owners, and contain no unrelated members. Mutation additionally
+requires the current administrator to be an owner. Unmarked, unowned, ambiguous,
+or unrelated groups cause a protective abort, not automatic adoption. An
+organizer must inventory and approve any existing-group migration separately.
 
-### 3. Password Rotation (Before Each Event)
+Existing participants are reused by their exact fixed UPNs. Guest and
+on-premises-synchronized user objects are rejected. Existing users are never
+patched, disabled, renamed, or password-reset. Reruns create only missing fixed
+objects and add only missing memberships in the verified workshop group.
+No password or MFA rotation workflow remains.
 
-```powershell
-cd identity
-# Rotate passwords + reset MFA for new event
-.\scripts\manage-users.ps1 -Action reset-all -EventName "december-workshop"
+## Protected export
+
+The caller's absolute output path must be outside the workspace, with a private
+parent directory and no symbolic-link ancestors. The file has mode `0600` and
+is exclusively opened during the run.
+
+`user_credentials.json` contains:
+
+* `tenant_id` and `group_id`
+* `user_object_ids` and `user_principal_names`, keyed `"01"` through `"07"`
+* `users`, with object ID, username, UPN, display name, password, and password status
+
+Passwords are cryptographically random and force a change at next sign-in.
+They are never printed, passed as CLI arguments, uploaded as artifacts, or
+placed in Bicep parameters. Each successful creation is saved immediately.
+Candidates are saved before creation; an interrupted request can leave
+`creation-unconfirmed` status. Preserve that private file for organizer review.
+Do not assume an unconfirmed candidate was applied.
+
+A rerun preserves a saved initial password only when its object ID still
+matches the directory. Existing passwords cannot be read from Graph. Without a
+matching saved credential, the export records `unavailable-existing` and a null
+password instead of silently resetting the account. Saved initial passwords
+are not guaranteed to remain current after participants change them.
+
+To print only the non-secret IDs for Bicep integration:
+
+```bash
+pwsh -NoProfile -Command '
+  $data = Get-Content -Raw "$HOME/.workshop-secrets/user_credentials.json" | ConvertFrom-Json
+  $data.group_id
+  $data.user_object_ids | ConvertTo-Json
+'
 ```
 
-### 4. Revoke Access (After Each Event)
+Never print or commit the complete credential export.
 
-```powershell
-.\scripts\manage-users.ps1 -Action rotate-passwords -EventName "post-december"
-```
+## Manual workflows and static Bicep stages
 
-## Variables
+`odaa-provision-identity.yml` is now a manual **verification** entrypoint.
+It delegates to `odaa-read-identity.yml`, which runs `provision.ps1 -ReadOnly`
+on a hosted runner. Missing users, incomplete membership, or an invalid group
+stop the job without creation or repair. OIDC needs `AZURE_CLIENT_ID`,
+federation, and admin-consented Graph read permissions such as `User.Read.All`
+and `Group.Read.All`; no Graph write permissions are needed by this workflow.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `user_count` | 1 | Number of users to create |
-| `tenant_id` | (required) | Azure AD tenant ID |
-| `entra_user_principal_domain` | `cptazure.org` | User principal name domain |
-| `azuread_propagation_wait_seconds` | 90 | Seconds to wait for AD propagation (first run only) |
-| `password_rotation_trigger` | `initial` | Change to rotate passwords |
+The read-only workflow emits only `group_id` and seven current `user_object_ids`.
+The hub is independent and has no identity dependency. Stages 03 networks and
+04 receive the group ID. Network, VM, and Oracle-network stages map keys `"01"`
+through `"07"` to template keys `mhuser1` through `mhuser7`. No old tenant IDs or
+credential templates are consumed.
 
-## Troubleshooting
+All stage entrypoints are manual and deploy one matching static `.bicepparam`
+file from `../deployments/`:
 
-### First Run Fails with Race Condition
+* 02: `odaa-deploy-hub.yml`, workshop `rg-workshop-hub`
+* 03 networks: `odaa-deploy-users.yml`, workshop subscription, `workshop-03-users`
+* 03 VMs: `odaa-deploy-user-vms.yml`, workshop subscription, `workshop-03-user-vms`
+* 04: `odaa-deploy-oracle-network.yml`, ODAA subscription
+* 05: `odaa-deploy-oracle-connectivity.yml`, workshop subscription
+* 06: `odaa-deploy-network-anchor.yml`, ODAA `rg-odaa-shared`
+* 07: `odaa-deploy-oracle-dns.yml`, workshop `rg-workshop-hub`
 
-If the initial deployment fails with "Provider produced inconsistent result":
+Workshop subscription is `aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483`; ODAA remains
+separate at `4ce5b5cc-e869-451f-98fc-f50448849ee0`.
 
-1. **Wait and retry** - Azure AD may need more time
-   ```powershell
-   terraform apply -var="azuread_propagation_wait_seconds=180"
-   ```
+Fill the actual hub firewall IP in stage 03 networks and stages 04/05. Network
+deployment requires no SSH key, image, or VM capacity. The separate VM stage
+requires an SSH public key, published image version `1.1.0`, and an unrestricted
+`Standard_D2s_v5` SKU with enough family/regional vCPU quota for seven VMs.
+It does not substitute a GPU. These checks cannot guarantee instantaneous
+physical allocation capacity.
 
-2. **Import orphaned resources** - If group member exists but state is inconsistent
-   ```powershell
-   $userId = (az ad user show --id "user00@cptazure.org" --query id -o tsv)
-   $groupId = (az ad group show --group "mh-odaa-user-grp" --query id -o tsv)
-   terraform import 'module.entra_id_users.azuread_group_member.aks_deployment_users[\"0\"]' "${groupId}/member/${userId}"
-   ```
+Fill the actual Oracle DNS domain (trailing dot included) and listening IP in
+stage 07. Stage 06 uses fixed `zone = '1'`.
+Do not invent these values or replace them with deployment inputs.
 
-### Subsequent Runs Should Be Safe
+Phase A is identity, hub, image, and seven user spokes/VMs; it has no Oracle
+readiness dependency. Every Phase-B deployment depends on the read-only
+`RequireOracleSubscription` gate. It requires exactly one Oracle subscription
+with `provisioningState=Succeeded` and `cloudAccountState=Available`.
+Pending, missing, failed, ambiguous, or unreadable state prevents all Phase-B
+writes.
 
-After the first successful run:
-- `azuread_user` has `ignore_changes = all` → no modifications
-- `azuread_group_member` has `ignore_changes = all` → no modifications
-- Password rotation uses `az ad user update` via local-exec → no Terraform state issues
-
-## Security Notes
-
- **IMPORTANT**: 
-- `user_credentials.json` contains passwords - **do not commit to git!**
-- Rotate passwords after each event to revoke participant access
-- The `password_rotation_trigger` value is logged - use descriptive names for audit trail
-
-## Related Documentation
-
-- [DEPLOYMENT_GUIDE.md](../docs/DEPLOYMENT_GUIDE.md) - Full deployment instructions
-- [RBAC_SUMMARY.md](../docs/RBAC_SUMMARY.md) - RBAC configuration details
+The independent image entrypoint remains `odaa-build-image.yml`. Old monolithic
+Terraform deployment/import/reset entrypoints and identity Terraform sources
+are retired. Removal of the unused bootstrap resource group is a separate
+organizer operation after safe inventory, not part of this script.

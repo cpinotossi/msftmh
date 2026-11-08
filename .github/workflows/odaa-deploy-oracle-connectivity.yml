@@ -1,0 +1,45 @@
+name: 05 - Deploy Oracle Connectivity
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: workshop-stage-05-oracle-connectivity
+  cancel-in-progress: false
+
+jobs:
+  oracle:
+    uses: ./.github/workflows/odaa-require-oracle-subscription.yml
+  connectivity:
+    needs: oracle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and Check Static Connectivity Configuration
+        run: |
+          az bicep build-params --file infra/deployments/05-oracle-connectivity.bicepparam \
+            --outfile "$RUNNER_TEMP/oracle-connectivity.parameters.json"
+          python3 -c '
+          import ipaddress, json, os
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "oracle-connectivity.parameters.json")) as source:
+              parameters = json.load(source)["parameters"]
+          address = ipaddress.ip_address(parameters["firewallPrivateIp"]["value"])
+          if address.version != 4 or not address.is_private:
+              raise SystemExit("Fill the actual hub firewall private IPv4 address in the static configuration")
+          '
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: '8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5'
+          subscription-id: 'aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483'
+      - name: Deploy Oracle Connectivity Only
+        run: |
+          az deployment sub create --name workshop-05-oracle-connectivity --location francecentral \
+            --subscription aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483 \
+            --template-file infra/deployments/05-oracle-connectivity.bicep \
+            --parameters @"$RUNNER_TEMP/oracle-connectivity.parameters.json" \
+            --output none

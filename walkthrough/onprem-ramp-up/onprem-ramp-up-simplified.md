@@ -1,4 +1,14 @@
-# 🔄 Challenge 4: OnPrem Ramp Up (Simplified)
+---
+title: Archived simplified ADB replication extension
+description: Legacy automated AKS and Autonomous Database replication notes.
+---
+
+## Archived simplified ADB replication extension
+
+> [!WARNING]
+> This legacy AKS/ADB automation is outside the
+> [Base Database workshop](../../README.md). Do not run it as a Base Database
+> deployment or data-migration procedure.
 
 [Back to workspace README](../../README.md) | [Original detailed walkthrough](./onprem-ramp-up.md)
 
