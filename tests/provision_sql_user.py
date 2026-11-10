@@ -14,6 +14,7 @@ def provision():
         raise ValueError("Invalid limited-user password")
     if password == os.environ["BASE_DB_SYS_PASSWORD"]:
         raise ValueError("Test-user and privileged passwords must differ")
+    oracledb.init_oracle_client()
     params = oracledb.ConnectParams(
         host=os.environ["TEST_DB_HOST"], port=int(os.environ["TEST_DB_PORT"]),
         service_name=os.environ["TEST_DB_SERVICE"], tcp_connect_timeout=15,

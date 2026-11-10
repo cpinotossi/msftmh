@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 setup() { load 'helpers/setup'; }
 
-@test "Base DB native DNS works over UDP TCP through the firewall only" {
+@test "Base DB replicated native hostname resolves over UDP TCP through the firewall only" {
   run python3 /opt/tests/network_probe.py --dns
   assert_success
   assert_output 'FIREWALL_DNS_OK'

@@ -20,6 +20,8 @@ import tarfile
 import time
 from urllib.parse import urlencode, urlparse
 
+from export_shared_config import workshop_config
+
 API = "2025-09-01"
 ARM = "https://management.azure.com"
 TAGS = {"workshop": "odaa", "managed-by": "workshop-base-db"}
@@ -100,8 +102,8 @@ def wait_deleted(resource_id, collection, timeout=7200):
 
 
 def metadata(subscription, shape, version, zone, compute_model, compute, storage):
-    if shape != "VM.Standard.x86":
-        raise ValueError("This Single Node test requires the documented VM.Standard.x86 shape")
+    if shape != "VM.BaseDB.x86":
+        raise ValueError("This Single Node test requires the regionally advertised VM.BaseDB.x86 shape")
     if not version or not zone or compute is None or storage is None:
         raise ValueError("Explicit version, zone, compute and storage are required")
     if compute < 1 or not 256 <= storage <= 40960:
@@ -112,6 +114,8 @@ def metadata(subscription, shape, version, zone, compute_model, compute, storage
     if len(matches) != 1:
         raise ValueError("Selected shape is not uniquely available in France Central / selected zone")
     limits = matches[0]
+    if limits.get("shapeFamily") != "VIRTUALMACHINE":
+        raise ValueError("Regional metadata must confirm the BaseDB virtual-machine shape family")
     minimum_nodes, maximum_nodes = limits.get("minimumNodeCount"), limits.get("maximumNodeCount")
     if minimum_nodes is None or maximum_nodes is None:
         raise ValueError("Regional metadata did not confirm single-node bounds")
@@ -120,21 +124,20 @@ def metadata(subscription, shape, version, zone, compute_model, compute, storage
     if limits.get("computeModel") != compute_model:
         raise ValueError("Regional metadata must explicitly confirm the selected compute model")
     if compute_model == "ECPU":
-        # Official Base DB@Azure creation guidance uses ECPU units, not cpuCoreCount.
         if not 4 <= compute <= 256:
-            raise ValueError("ECPU count must be 4..256; OCPU/core metadata is not an ECPU bound")
-    elif compute_model == "OCPU":
-        minimum = limits.get("minimumCoreCount")
-        maximum = limits.get("availableCoreCount")
-        increment = limits.get("coreCountIncrement")
-        if None in (minimum, maximum, increment) or increment < 1:
-            raise ValueError("Regional metadata did not provide verifiable OCPU bounds")
-        if not (minimum <= compute <= maximum) or (compute - minimum) % increment:
-            raise ValueError("OCPU count violates regional shape bounds")
-    else:
+            raise ValueError("ECPU count must be 4..256")
+    elif compute_model != "OCPU":
         raise ValueError("Explicit ECPU or OCPU compute model is required")
+    # These limits use the metadata's verified computeModel; never convert units.
+    minimum = limits.get("minimumCoreCount")
+    maximum = limits.get("availableCoreCount")
+    increment = limits.get("coreCountIncrement")
+    if any(type(value) is not int for value in (minimum, maximum, increment)) or increment < 1:
+        raise ValueError("Regional metadata did not provide verifiable compute bounds")
+    if not (minimum <= compute <= maximum) or (compute - minimum) % increment:
+        raise ValueError("Compute count violates regional shape bounds or increment")
     versions = listing(prefix + "/dbSystemDbVersions?" + urlencode({
-        "dbSystemShape": shape, "storageManagement": "LVM", "shapeFamily": "SINGLENODE",
+        "storageManagement": "LVM", "shapeFamily": limits["shapeFamily"],
     }))
     selected = [r["properties"] for r in versions if r["properties"].get("version") == version]
     if len(selected) != 1 or selected[0].get("supportsPdb") is not True:
@@ -145,24 +148,34 @@ def metadata(subscription, shape, version, zone, compute_model, compute, storage
 
 
 def ids(subscription):
-    # Only the fixed participant DB RGs are canonical deployment targets.
+    config = workshop_config()
+    if subscription != config["odaaSubscriptionId"]:
+        raise ValueError("BaseDB must use the fixed ODAA subscription")
     name = os.environ["BASE_DB_RESOURCE_GROUP"]
-    if not re.fullmatch(r"rg-odaa-mhuser[1-7]", name):
-        raise ValueError("Test DB must use one of the seven static participant resource groups")
+    system_name = os.environ["BASE_DB_NAME"]
+    if name != config["databaseResourceGroup"]:
+        raise ValueError("Test DB must use the shared ODAA resource group")
+    permitted = {name for user in config["participants"].values()
+                 for name in (user["databaseName"], user["workshopDatabaseName"])}
+    if system_name not in permitted:
+        raise ValueError("DB must use an assigned workshop or reserved test database name")
     group = f"/subscriptions/{subscription}/resourceGroups/{name}"
     provider = group + "/providers/Oracle.Database"
-    return group, provider, provider + "/dbSystems/basetest00"
+    return group, provider, provider + "/dbSystems/" + system_name
 
 
 def central_anchor(args):
     anchors = json.loads(os.environ["BASE_DB_NETWORK_ANCHOR_IDS_BY_ZONE"])
     anchor_id = anchors[args.zone]
     resource_id = os.environ["BASE_DB_RESOURCE_ANCHOR_ID"]
-    prefix = f"/subscriptions/{args.subscription}/resourceGroups/"
+    config = workshop_config()
+    if args.subscription != config["odaaSubscriptionId"]:
+        raise ValueError("Central anchors must use the fixed ODAA subscription")
+    prefix = f"/subscriptions/{args.subscription}/resourceGroups/{config['databaseResourceGroup']}/providers/Oracle.Database/"
     for value, kind in ((anchor_id, "networkAnchors"), (resource_id, "resourceAnchors")):
-        if not re.fullmatch(re.escape(prefix) + r"[^/]+/providers/Oracle\.Database/" + kind + r"/[^/]+",
+        if not re.fullmatch(re.escape(prefix) + kind + r"/[^/]+",
                             value, re.I):
-            raise ValueError("Central anchor ID must belong to the explicit ODAA subscription")
+            raise ValueError("Central anchor ID must belong to the shared ODAA resource group")
     anchor = rest("GET", anchor_id)
     props = anchor["properties"]
     if (props.get("provisioningState") != "Succeeded" or anchor.get("zones") != [args.zone]
@@ -171,17 +184,13 @@ def central_anchor(args):
     resource = rest("GET", resource_id)
     if resource["properties"].get("provisioningState") != "Succeeded":
         raise ValueError("Central resource anchor is not ready")
-    for flag in ("isOracleDnsListeningEndpointEnabled", "isOracleDnsForwardingEndpointEnabled"):
-        if props.get(flag) is not True:
-            raise ValueError("Required bidirectional Oracle DNS endpoint is not enabled")
-    for key in ("dnsListeningEndpointIpAddress", "dnsForwardingEndpointIpAddress"):
-        if not ipaddress.ip_address(props[key]).is_private:
-            raise ValueError("Expected private Oracle DNS endpoint")
+    if props.get("isOracleToAzureDnsZoneSyncEnabled") is not True:
+        raise ValueError("Native Oracle-to-Azure private DNS zone replication is required")
+    if props.get("isOracleDnsListeningEndpointEnabled") is not False:
+        raise ValueError("Oracle listening must be disabled for the replicated DNS architecture")
     for variable, actual in (
         ("BASE_DB_NETWORK_ANCHOR_ID", anchor_id),
         ("BASE_DB_NETWORK_ANCHOR_ZONE", args.zone),
-        ("BASE_DB_ORACLE_DNS_LISTENING_IP", props["dnsListeningEndpointIpAddress"]),
-        ("BASE_DB_ORACLE_DNS_FORWARDING_IP", props["dnsForwardingEndpointIpAddress"]),
         ("BASE_DB_OCI_VCN_ID", props.get("ociVcnId")),
         ("BASE_DB_ODAA_SUBNET_ID", props.get("subnetId")),
     ):
@@ -198,7 +207,8 @@ def create(args):
     metadata(args.subscription, args.shape, args.version, args.zone, args.compute_model, args.compute, args.storage)
     group, provider, system_id = ids(args.subscription)
     anchor_id, resource_anchor, _ = central_anchor(args)
-    if any(r["name"] == "basetest00" for r in listing(provider + "/dbSystems")):
+    system_name = system_id.rsplit("/", 1)[1]
+    if any(r["name"].lower() == system_name.lower() for r in listing(provider + "/dbSystems")):
         raise RuntimeError("Test DB already exists; refusing to overwrite or adopt it")
     password = os.environ.get("BASE_DB_SYS_PASSWORD", "")
     ssh_key = os.environ.get("BASE_DB_SSH_PUBLIC_KEY", "")
@@ -210,7 +220,7 @@ def create(args):
     if not ssh_key.startswith("ssh-rsa "):
         raise ValueError("Explicit RSA SSH public key environment variable is required")
     values = {
-        "shape": args.shape, "dbVersion": args.version, "zone": args.zone,
+        "dbSystemName": system_name, "shape": args.shape, "dbVersion": args.version, "zone": args.zone,
         "computeModel": args.compute_model, "computeCount": args.compute,
         "storageSizeGb": args.storage, "sshPublicKey": ssh_key,
         "adminPassword": password, "owner": args.owner,
@@ -228,7 +238,7 @@ def create(args):
         command([
             "az", "deployment", "group", "create", "--subscription", args.subscription,
             "--resource-group", group.rsplit("/", 1)[1], "--name", "basedb-test-" + args.owner,
-            "--template-file", str(ROOT / "bicep/base-db-test.json"),
+            "--template-file", str(ROOT / "bicep/base-db-test.bicep"),
             "--parameters", "@" + str(parameters), "--output", "json",
         ])
     finally:
@@ -299,10 +309,8 @@ def discover(args):
             or anchor["properties"]["ociVcnDnsLabel"].lower() not in domain.lower().split(".")):
         raise ValueError("Invalid or inconsistent authoritative Oracle DNS hostname/domain")
     hostname = label + "." + domain
-    home = one(oci("db", "db-home", "list", "--compartment-id", compartment,
-                   "--db-system-id", system_ocid, "--all"), "DB home")
     database = one(oci("db", "database", "list", "--compartment-id", compartment,
-                       "--db-home-id", home["id"], "--all"), "container database")
+                       "--db-system-id", system_ocid), "container database")
     pdb = one([p for p in oci("db", "pluggable-database", "list",
                              "--database-id", database["id"], "--all")
                if p["pdb-name"].upper() == "WORKSHOP" and p["lifecycle-state"] == "AVAILABLE"],
@@ -314,15 +322,15 @@ def discover(args):
     if port == 1522 or not (1 <= port <= 65535):
         raise ValueError("Unexpected ADB-style or invalid listener port")
     config = {
-        "TEST_MHODAA_SUB": args.subscription, "TEST_MHCORE_SUB": args.dns_subscription,
+        "TEST_ODAA_SUBSCRIPTION_ID": args.subscription,
+        "TEST_WORKSHOP_SUBSCRIPTION_ID": args.dns_subscription,
         "TEST_DB_ID": system_id, "TEST_NETWORK_ANCHOR_ID": anchor_id,
         "TEST_RESOURCE_ANCHOR_ID": resource_anchor_id,
         "TEST_DB_SHAPE": args.shape, "TEST_DB_VERSION": args.version,
         "TEST_DB_COMPUTE_MODEL": args.compute_model, "TEST_DB_COMPUTE": str(args.compute),
         "TEST_DB_STORAGE": str(args.storage),
         "TEST_DB_IP": ip, "TEST_DB_HOST": hostname, "TEST_ORACLE_DNS_DOMAIN": domain,
-        "TEST_ORACLE_DNS_LISTENING_IP": anchor["properties"]["dnsListeningEndpointIpAddress"],
-        "TEST_ORACLE_DNS_FORWARDING_IP": anchor["properties"]["dnsForwardingEndpointIpAddress"],
+        "TEST_ORACLE_DNS_ZONE_ID": os.environ["BASE_DB_ORACLE_DNS_ZONE_ID"],
         "TEST_FIREWALL_PRIVATE_IP": str(ipaddress.ip_address(os.environ["BASE_DB_FIREWALL_PRIVATE_IP"])),
         "TEST_HUB_RESOLVER_INBOUND_IP": str(ipaddress.ip_address(os.environ["BASE_DB_DNS_RESOLVER_INBOUND_IP"])),
         "TEST_HUB_VNET_ID": os.environ["BASE_DB_HUB_VNET_ID"],
@@ -331,17 +339,100 @@ def discover(args):
         "TEST_ODAA_RG": anchor["properties"]["subnetId"].split("/")[4],
         "TEST_ODAA_VNET": anchor["properties"]["subnetId"].split("/")[8],
         "TEST_DB_PORT": str(port), "TEST_DB_SERVICE": service, "TEST_DB_PDB": pdb["pdb-name"],
-        "TEST_TR_RG": args.vm_rg,
-        "TEST_TR_VNET": os.environ["BASE_DB_VM_VNET_NAME"],
+        "TEST_VM_RESOURCE_GROUP": args.vm_rg,
+        "TEST_VM_VNET_NAME": os.environ["BASE_DB_VM_VNET_NAME"],
     }
     Path("base-db-config.json").write_text(json.dumps(config))
 
 
+def sql_ingress_rules(config):
+    policy = config["oracleSqlIngress"]
+    sources = policy["sourceCidrs"]
+    expected = [f"10.0.{int(index)}.0/24" for index in config["participants"]]
+    if sources != expected or type(policy["destinationPort"]) is not int or policy["destinationPort"] != 1521:
+        raise ValueError("SQL ingress must use exactly the seven workshop client /24s and TCP 1521")
+    return [{
+        "direction": "INGRESS", "protocol": "6", "sourceType": "CIDR_BLOCK",
+        "source": source, "isStateless": False,
+        "tcpOptions": {"destinationPortRange": {"min": 1521, "max": 1521}},
+        "description": "OracleWorkshop: client SQL " + source,
+    } for source in sources]
+
+
+def matches_sql_rule(actual, desired):
+    tcp = actual.get("tcp-options") or {}
+    return (
+        actual.get("direction") == desired["direction"]
+        and actual.get("protocol") == desired["protocol"]
+        and actual.get("source-type") == desired["sourceType"]
+        and actual.get("source") == desired["source"]
+        and actual.get("is-stateless") is False
+        and actual.get("is-valid") is True
+        and tcp.get("destination-port-range") == desired["tcpOptions"]["destinationPortRange"]
+        and tcp.get("source-port-range") is None
+    )
+
+
+def configure_network(args):
+    config = workshop_config()
+    desired = sql_ingress_rules(config)
+    _, _, system_id = ids(args.subscription)
+    anchor_id, _, anchor = central_anchor(args)
+    system = rest("GET", system_id)
+    props = system["properties"]
+    if (not owned(system, args.owner) or props.get("provisioningState") != "Succeeded"
+            or props.get("lifecycleState") != "Available"
+            or props.get("networkAnchorId", "").lower() != anchor_id.lower()
+            or props.get("listenerPort") != config["oracleSqlIngress"]["destinationPort"]):
+        raise ValueError("SQL ingress requires the owned, available database on the selected anchor and port")
+    for participant, rule in zip(config["participants"].values(), desired):
+        name = "vnet-vm-" + participant["name"]
+        vnet_id = (f"/subscriptions/{config['workshopSubscriptionId']}/resourceGroups/"
+                   f"{participant['vmResourceGroup']}/providers/Microsoft.Network/virtualNetworks/{name}")
+        vnet = rest("GET", vnet_id + "?api-version=2024-05-01")
+        if vnet["properties"]["addressSpace"]["addressPrefixes"] != [rule["source"]]:
+            raise ValueError("Configured SQL ingress source differs from the actual participant VNet")
+    compartment = os.environ["OCI_COMPARTMENT_ID"]
+    node = one([n for n in oci("db", "node", "list", "--compartment-id", compartment,
+                              "--db-system-id", props["ocid"], "--all")
+                if n["lifecycle-state"] == "AVAILABLE"], "available DB node")
+    vnic = oci("network", "vnic", "get", "--vnic-id", node["vnic-id"])
+    if vnic.get("subnet-id") != anchor["properties"]["ociSubnetId"]:
+        raise ValueError("Refusing to modify a DB VNIC outside the selected anchor subnet")
+    nsg_id = one(vnic["nsg-ids"], "attached database NSG")
+    nsg = oci("network", "nsg", "get", "--nsg-id", nsg_id)
+    if (nsg.get("vcn-id") != anchor["properties"]["ociVcnId"]
+            or nsg.get("compartment-id") != compartment or nsg.get("lifecycle-state") != "AVAILABLE"):
+        raise ValueError("Attached database NSG does not match the anchor VCN and linked compartment")
+    actual = oci("network", "nsg", "rules", "list", "--nsg-id", nsg_id, "--all")
+    if any((rule.get("description") or "").startswith("OracleWorkshop: client SQL ")
+           and not any(matches_sql_rule(rule, want) for want in desired) for rule in actual):
+        raise ValueError("Existing workshop SQL rule has drifted; explicit review required before modification")
+    missing = [want for want in desired if not any(matches_sql_rule(rule, want) for rule in actual)]
+    if args.dry_run:
+        print(json.dumps({"nsgId": nsg_id, "missingRules": missing}, indent=2))
+        return
+    if missing:
+        oci("network", "nsg", "rules", "add", "--nsg-id", nsg_id,
+            "--security-rules", json.dumps(missing))
+    for attempt in range(6):
+        actual = oci("network", "nsg", "rules", "list", "--nsg-id", nsg_id, "--all")
+        if all(any(matches_sql_rule(rule, want) for rule in actual) for want in desired):
+            print(f"Verified seven stateful client SQL ingress rules on the attached DB NSG; added {len(missing)}.")
+            return
+        if attempt < 5:
+            time.sleep(2)
+    raise RuntimeError("SQL ingress rules were not verified after the OCI update")
+
+
 def cleanup(subscription, owner=None, dry_run=False):
-    provider = f"/subscriptions/{subscription}/providers/Oracle.Database"
+    config = workshop_config()
+    if subscription != config["odaaSubscriptionId"]:
+        raise ValueError("Cleanup must use the fixed ODAA subscription")
+    provider = (f"/subscriptions/{subscription}/resourceGroups/{config['databaseResourceGroup']}"
+                "/providers/Oracle.Database")
     systems = listing(provider + "/dbSystems")
-    permitted = (r"/subscriptions/" + re.escape(subscription)
-                 + r"/resourceGroups/rg-odaa-mhuser[1-7]/providers/Oracle\.Database/dbSystems/[^/]+")
+    permitted = re.escape(provider) + r"/dbSystems/[^/]+"
     selected = [r for r in systems if owned(r, owner) and re.fullmatch(permitted, r["id"], re.I)]
     for resource in selected:
         if not owned(rest("GET", resource["id"]), owner):
@@ -475,8 +566,10 @@ def execute_run_command(command_id, location, script, passwords, report_path, va
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("preflight", "create", "discover", "remote", "cleanup", "anchor-check"))
-    parser.add_argument("--subscription", default=os.environ.get("ODAA_SUBSCRIPTION_ID", os.environ.get("TF_VAR_mhodaa_subscription_id")))
+    parser.add_argument("action", choices=(
+        "preflight", "create", "discover", "configure-network", "remote", "cleanup", "anchor-check",
+    ))
+    parser.add_argument("--subscription", default=os.environ.get("ODAA_SUBSCRIPTION_ID"))
     parser.add_argument("--owner", default=os.environ.get("BASE_DB_OWNER"))
     parser.add_argument("--shape", default=os.environ.get("BASE_DB_SHAPE"))
     parser.add_argument("--version", default=os.environ.get("BASE_DB_VERSION"))
@@ -484,7 +577,7 @@ def main():
     parser.add_argument("--compute-model", default=os.environ.get("BASE_DB_COMPUTE_MODEL"))
     parser.add_argument("--compute", type=int, default=os.environ.get("BASE_DB_COMPUTE"))
     parser.add_argument("--storage", type=int, default=os.environ.get("BASE_DB_STORAGE"))
-    parser.add_argument("--dns-subscription", default=os.environ.get("WORKSHOP_SUBSCRIPTION_ID", os.environ.get("TF_VAR_mhcore_subscription_id")))
+    parser.add_argument("--dns-subscription", default=os.environ.get("WORKSHOP_SUBSCRIPTION_ID"))
     parser.add_argument("--vm-rg", default=os.environ.get("BASE_DB_VM_RG"))
     parser.add_argument("--vm-name", default=os.environ.get("BASE_DB_VM_NAME"))
     parser.add_argument("--dry-run", action="store_true")
@@ -499,6 +592,8 @@ def main():
         create(args)
     elif args.action == "discover":
         discover(args)
+    elif args.action == "configure-network":
+        configure_network(args)
     elif args.action == "remote":
         remote(args)
     elif args.action == "cleanup":

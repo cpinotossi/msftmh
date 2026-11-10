@@ -20,8 +20,7 @@ OUTPUTS = {
     "resourceAnchorId": "BASE_DB_RESOURCE_ANCHOR_ID",
     "networkAnchorId": "BASE_DB_NETWORK_ANCHOR_ID",
     "networkAnchorZone": "BASE_DB_NETWORK_ANCHOR_ZONE",
-    "oracleDnsListeningIp": "BASE_DB_ORACLE_DNS_LISTENING_IP",
-    "oracleDnsForwardingIp": "BASE_DB_ORACLE_DNS_FORWARDING_IP",
+    "oracleDnsZoneId": "BASE_DB_ORACLE_DNS_ZONE_ID",
     "ociVcnId": "BASE_DB_OCI_VCN_ID",
 }
 
@@ -58,10 +57,15 @@ def export(deployments, stream):
     stream.writelines(lines)
 
 
-def participant(index):
+def workshop_config():
     config = json.loads((Path(__file__).parent / "workshop_config.json").read_text())
     if tuple(config["participants"]) != ("01", "02", "03", "04", "05", "06", "07"):
         raise ValueError("Workshop requires exactly the static seven participant keys")
+    return config
+
+
+def participant(index):
+    config = workshop_config()
     return config, config["participants"][index]
 
 
@@ -81,7 +85,8 @@ def main():
             "WORKSHOP_SUBSCRIPTION_ID": config["workshopSubscriptionId"],
             "ODAA_SUBSCRIPTION_ID": config["odaaSubscriptionId"],
             "BASE_DB_VM_NAME": user["vmName"], "BASE_DB_VM_RG": user["vmResourceGroup"],
-            "BASE_DB_RESOURCE_GROUP": user["databaseResourceGroup"],
+            "BASE_DB_RESOURCE_GROUP": config["databaseResourceGroup"],
+            "BASE_DB_NAME": user["databaseName"],
         }
         stream.writelines(f"{key}={value}\n" for key, value in values.items())
     elif args.deployment_id:

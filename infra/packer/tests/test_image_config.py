@@ -50,8 +50,8 @@ class ImageConfigTests(unittest.TestCase):
         remote = yaml.safe_load((ROOT / "infra/ansible/playbooks/oracle-tools.yml").read_text())
         self.assertEqual(remote[0]["ansible.builtin.import_playbook"], "../../packer/ansible/oracle-tools.yml")
 
-    def test_local_defaults_and_gen2_source(self):
-        config = (PACKER / "variables.auto.pkrvars.hcl").read_text()
+    def test_tracked_defaults_and_gen2_source(self):
+        config = (PACKER / "variables.pkrvars.hcl.example").read_text()
         for value in ("aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483", "rg-workshop-images", "1.1.0"):
             self.assertIn(value, config)
         source = (PACKER / "oracle-workshop.pkr.hcl").read_text()

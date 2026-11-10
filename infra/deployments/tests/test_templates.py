@@ -46,12 +46,30 @@ class DeploymentTemplatesTests(unittest.TestCase):
             cls.templates[name] = json.loads(result.stdout)
 
     def test_exactly_seven_participants(self):
-        for name in ("03-users", "03-user-vms", "04-oracle-network"):
+        for name in ("03-users", "03-user-vms"):
             with self.subTest(stage=name):
                 participants = self.templates[name]["variables"]["participants"]
                 names = [item["name"] if isinstance(item, dict) else item for item in participants]
                 self.assertEqual(names, PARTICIPANTS)
                 self.assertNotIn("userCount", self.templates[name].get("parameters", {}))
+
+    def test_oracle_resources_and_database_writes_share_one_group(self):
+        template = self.templates["04-oracle-network"]
+        groups = of_type(template, "Microsoft.Resources/resourceGroups")
+        self.assertEqual([group["name"] for group in groups], ["rg-odaa-shared"])
+        self.assertNotIn("userObjectIds", template["parameters"])
+        access = next(resource for resource in resources(template) if resource["name"] == "db-access-shared")
+        self.assertEqual(access["resourceGroup"], "rg-odaa-shared")
+        assignment = of_type(access["properties"]["template"], "Microsoft.Authorization/roleAssignments")[0]
+        self.assertEqual(assignment["properties"]["principalType"], "Group")
+        self.assertEqual(access["properties"]["parameters"]["groupObjectId"]["value"],
+                         "[parameters('workshopGroupId')]")
+        creator = next(role for role in of_type(template, "Microsoft.Authorization/roleDefinitions")
+                       if role["properties"]["roleName"] == "Oracle Workshop BaseDB Creator")
+        self.assertEqual(creator["properties"]["permissions"][0]["actions"], [
+            "Oracle.Database/dbSystems/*", "Microsoft.Resources/deployments/*",
+            "Microsoft.Resources/subscriptions/resourceGroups/read",
+        ])
 
     def test_github_bootstrap_has_only_identity_and_approved_rbac(self):
         template = self.templates["00-github-identity"]
@@ -145,7 +163,7 @@ class DeploymentTemplatesTests(unittest.TestCase):
         self.assertEqual(rules["DenyOtherOutbound"]["access"], "Deny")
         self.assertEqual(rules["AllowDiagnosticDNS"]["destinationPortRange"], "53")
         self.assertEqual(rules["AllowDiagnosticDNS"]["destinationAddressPrefixes"],
-                         ["10.100.0.4", "10.100.0.132", "192.168.0.0/24"])
+                         ["10.100.0.4", "10.100.0.132"])
         hub = of_type(self.templates["02-hub"], "Microsoft.Network/virtualNetworks")[0]
         diagnostic = next(s for s in hub["properties"]["subnets"] if s["name"] == "snet-dns-diagnostic")
         self.assertEqual(diagnostic["properties"]["addressPrefix"], "10.100.1.0/28")
@@ -205,6 +223,34 @@ class DeploymentTemplatesTests(unittest.TestCase):
         self.assertTrue(any("acdd72a7-3385-48ef-bd42-f606fba81ae7" in role for role in roles))
         self.assertFalse(any("8e3af657-a8ff-443c-a75c-2fe8c4bcb635" in role for role in roles))
 
+    def test_organizer_login_is_scoped_to_the_seven_spokes_and_preserves_participant_access(self):
+        template = self.templates["03-users"]
+        organizer = template["parameters"]["organizerObjectId"]
+        self.assertEqual(organizer["minLength"], 36)
+        self.assertEqual(organizer["maxLength"], 36)
+        self.assertNotIn("defaultValue", organizer)
+        access = next(resource for resource in resources(template)
+                      if resource.get("copy", {}).get("name") == "access")
+        self.assertEqual(access["copy"]["count"], "[length(variables('participants'))]")
+        self.assertEqual(access["resourceGroup"],
+                         "[format('rg-vm-{0}', variables('participants')[copyIndex()].name)]")
+        self.assertEqual(access["properties"]["parameters"]["organizerObjectId"]["value"],
+                         "[parameters('organizerObjectId')]")
+        assignments = of_type(access["properties"]["template"], "Microsoft.Authorization/roleAssignments")
+        self.assertEqual(len(assignments), 2)
+        participant, = [assignment for assignment in assignments
+                        if "b24988ac-6180-42a0-ab88-20f7382dd24c" in assignment["properties"]["roleDefinitionId"]]
+        self.assertEqual(participant["properties"]["principalId"], "[parameters('userObjectId')]")
+        admin, = [assignment for assignment in assignments
+                  if "1c0163c0-47e6-4577-8991-ea5c82e286e4" in assignment["properties"]["roleDefinitionId"]]
+        self.assertEqual(admin["properties"]["principalId"], "[parameters('organizerObjectId')]")
+        self.assertEqual(admin["properties"]["principalType"], "User")
+        self.assertIn("'organizer-vm-admin-login'", admin["name"])
+        self.assertFalse(of_type(self.templates["02-hub"], "Microsoft.Authorization/roleAssignments"))
+        user_login, = of_type(self.templates["03-user-vms"], "Microsoft.Authorization/roleAssignments")
+        self.assertIn("fb879df8-f326-4884-b1cf-06f3ad86be52", user_login["properties"]["roleDefinitionId"])
+        self.assertEqual(user_login["properties"]["principalId"], "[parameters('userObjectId')]")
+
     def test_exact_oracle_route_is_present_before_phase_b(self):
         route_table = of_type(self.templates["03-users"], "Microsoft.Network/routeTables")[0]
         routes = {route["name"]: route["properties"] for route in route_table["properties"]["routes"]}
@@ -216,28 +262,39 @@ class DeploymentTemplatesTests(unittest.TestCase):
         self.assertIn("routeTable", vnet["properties"]["subnets"][0]["properties"])
         self.assertTrue(of_type(oracle, "Microsoft.Network/routeTables"))
 
-    def test_shared_anchor_bidirectional_domain_specific_dns(self):
+    def test_shared_anchor_uses_native_zone_replication_without_dns_endpoints(self):
         anchor = of_type(self.templates["06-network-anchor"], "Oracle.Database/networkAnchors")[0]
         properties = anchor["properties"]
-        self.assertTrue(properties["isOracleDnsListeningEndpointEnabled"])
-        self.assertTrue(properties["isOracleDnsForwardingEndpointEnabled"])
-        self.assertFalse(properties["isOracleToAzureDnsZoneSyncEnabled"])
-        self.assertEqual(properties["dnsListeningEndpointAllowedCidrs"], "10.100.0.192/26")
-        self.assertEqual(properties["dnsForwardingRules"], [{
-            "domainNames": "basedb.workshop.internal",
-            "forwardingIpAddress": "10.100.0.132",
-        }])
+        self.assertFalse(properties["isOracleDnsListeningEndpointEnabled"])
+        self.assertFalse(properties["isOracleDnsForwardingEndpointEnabled"])
+        self.assertTrue(properties["isOracleToAzureDnsZoneSyncEnabled"])
+        self.assertNotIn("dnsListeningEndpointAllowedCidrs", properties)
+        self.assertNotIn("dnsForwardingRules", properties)
+        self.assertNotIn("oracleDnsListeningIp", self.templates["06-network-anchor"]["outputs"])
 
-    def test_oracle_dns_uses_actual_domain_and_endpoint(self):
+    def test_oci_sql_config_matches_bicep_client_routes_and_firewall(self):
+        config = json.loads((ROOT.parents[1] / "tests/workshop_config.json").read_text())
+        policy = config["oracleSqlIngress"]
+        rule, = of_type(
+            self.templates["05-oracle-connectivity"],
+            "Microsoft.Network/firewallPolicies/ruleCollectionGroups",
+        )
+        network_rule = rule["properties"]["ruleCollections"][0]["rules"][0]
+        self.assertEqual(policy["sourceCidrs"], network_rule["sourceAddresses"][:7])
+        self.assertIn(str(policy["destinationPort"]), network_rule["destinationPorts"])
+
+    def test_oracle_dns_links_existing_provider_zone_to_cross_subscription_hub(self):
         template = self.templates["07-oracle-dns"]
-        self.assertNotIn("defaultValue", template["parameters"]["oracleDnsDomain"])
-        self.assertNotIn("defaultValue", template["parameters"]["oracleDnsListeningIp"])
-        self.assertGreater(template["parameters"]["oracleDnsDomain"]["minLength"], 1)
-        rule = of_type(template, "Microsoft.Network/dnsForwardingRulesets/forwardingRules")[0]
-        self.assertEqual(rule["properties"]["domainName"], "[parameters('oracleDnsDomain')]")
-        self.assertEqual(rule["properties"]["targetDnsServers"], [{
-            "ipAddress": "[parameters('oracleDnsListeningIp')]", "port": 53,
-        }])
+        self.assertNotIn("defaultValue", template["parameters"]["oracleDnsZoneName"])
+        self.assertGreater(template["parameters"]["oracleDnsZoneName"]["minLength"], 1)
+        self.assertFalse(of_type(template, "Microsoft.Network/privateDnsZones"))
+        self.assertFalse(of_type(template, "Microsoft.Network/dnsForwardingRulesets"))
+        link, = of_type(template, "Microsoft.Network/privateDnsZones/virtualNetworkLinks")
+        self.assertIn("parameters('oracleDnsZoneName')", link["name"])
+        self.assertFalse(link["properties"]["registrationEnabled"])
+        self.assertIn("aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483", link["properties"]["virtualNetwork"]["id"])
+        self.assertIn("rg-workshop-hub", link["properties"]["virtualNetwork"]["id"])
+        self.assertIn("oracleDnsZoneId", template["outputs"])
 
 
 if __name__ == "__main__":

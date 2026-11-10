@@ -66,6 +66,11 @@ function Invoke-RestMethod {
     }
     if ($path -eq 'users') {
         if ($global:IdentityTestUsers.ContainsKey($data.userPrincipalName)) { throw 'Duplicate user creation.' }
+        $number = $data.mailNickname -replace '^mhuser', ''
+        if ($data.userPrincipalName -ne "mhuser$number@cptdemo.org" -or
+            $data.givenName -ne 'MicroHack' -or $data.surname -ne "User $number") {
+            throw 'Workshop users must use cptdemo.org and have SCIM-compatible names.'
+        }
         $password = $data.passwordProfile.password
         if ($password.Length -lt 24 -or $password -cnotmatch '[A-Z]' -or
             $password -cnotmatch '[a-z]' -or $password -notmatch '\d' -or
@@ -107,6 +112,35 @@ try {
     foreach ($key in $first.users.PSObject.Properties.Name) {
         if ($first.users.$key.password -ne $second.users.$key.password) { throw 'Existing password export was not preserved.' }
     }
+    $testWorkspace = Join-Path $directory 'workspace'
+    $testScripts = Join-Path $testWorkspace 'infra/identity'
+    $testSecrets = Join-Path $testWorkspace '.workshop-secrets'
+    [IO.Directory]::CreateDirectory($testScripts) | Out-Null
+    [IO.Directory]::CreateDirectory($testSecrets) | Out-Null
+    [IO.File]::SetUnixFileMode($testSecrets, [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite -bor [IO.UnixFileMode]::UserExecute)
+    git init --quiet $testWorkspace
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize offline Git fixture.' }
+    $testTarget = Join-Path $testScripts 'provision.ps1'
+    [IO.File]::Copy($target, $testTarget)
+    $ignoreFile = Join-Path $testWorkspace '.gitignore'
+    [IO.File]::WriteAllText($ignoreFile, ".workshop-secrets/`n")
+    $testOutput = Join-Path $testSecrets 'user_credentials.json'
+    & $testTarget -ReadOnly -OutputFile $testOutput | Out-Null
+    if (-not [IO.File]::Exists($testOutput) -or $global:IdentityTestWrites -ne 15) {
+        throw 'Ignored workspace credentials were not accepted read-only.'
+    }
+    [IO.File]::WriteAllText($ignoreFile, '')
+    $rejected = $false
+    try { & $testTarget -ReadOnly -OutputFile $testOutput | Out-Null }
+    catch { $rejected = $_.Exception.Message -match 'Git-ignored' }
+    if (-not $rejected) { throw 'Unignored workspace credentials were accepted.' }
+    [IO.File]::WriteAllText($ignoreFile, ".workshop-secrets/`n")
+    git -C $testWorkspace add -f -- $testOutput
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot stage offline credential fixture.' }
+    $rejected = $false
+    try { & $testTarget -ReadOnly -OutputFile $testOutput | Out-Null }
+    catch { $rejected = $_.Exception.Message -match 'Git-tracked' }
+    if (-not $rejected) { throw 'Git-tracked workspace credentials were accepted.' }
     $delegatedToken = $global:IdentityTestToken
     $appClaims = @{tid=$global:IdentityTestTenant; oid=$global:IdentityTestActor} | ConvertTo-Json -Compress
     $appPayload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($appClaims)).TrimEnd('=').Replace('+','-').Replace('/','_')
@@ -132,14 +166,14 @@ try {
     if (-not $rejected -or $global:IdentityTestWrites -ne 15) { throw 'Unowned group must abort before writes.' }
     & $target -ReadOnly -OutputFile (Join-Path $directory 'identities.json') | Out-Null
     if ($global:IdentityTestWrites -ne 15) { throw 'Read-only mode performed a mutation.' }
-    $global:IdentityTestUsers.Remove('mhuser7@mngenvmcap956455.onmicrosoft.com')
+    $global:IdentityTestUsers.Remove('mhuser7@cptdemo.org')
     $rejected = $false
     try { & $target -ReadOnly -OutputFile (Join-Path $directory 'incomplete.json') | Out-Null }
     catch { $rejected = $_.Exception.Message -match 'missing' }
     if (-not $rejected -or $global:IdentityTestWrites -ne 15) { throw 'Read-only mode must reject a missing participant without creating it.' }
     $rejected = $false
     try { & $target -OutputFile (Join-Path $PSScriptRoot 'forbidden.json') | Out-Null }
-    catch { $rejected = $_.Exception.Message -match 'outside the workspace' }
+    catch { $rejected = $_.Exception.Message -match 'inside .workshop-secrets' }
     if (-not $rejected -or [IO.File]::Exists((Join-Path $PSScriptRoot 'forbidden.json'))) { throw 'Workspace credential path was not rejected.' }
     $global:IdentityTestGroup = $null
     $global:IdentityTestUsers = @{}

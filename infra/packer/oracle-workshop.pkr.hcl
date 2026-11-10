@@ -86,7 +86,7 @@ variable "vm_size" {
 # ===============================================================================
 
 source "azure-arm" "oracle-workshop" {
-  # Authentication — uses active az CLI session (az login --identity for MSI)
+  # Uses the active local Azure CLI or hosted OIDC session.
   use_azure_cli_auth = true
   subscription_id    = var.subscription_id
 

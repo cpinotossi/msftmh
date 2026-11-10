@@ -23,19 +23,12 @@ resource anchor 'Oracle.Database/networkAnchors@2025-09-01' = {
     resourceAnchorId: resourceAnchor.id
     subnetId: subnet.id
     ociVcnDnsLabel: 'mhworkshop'
-    isOracleDnsListeningEndpointEnabled: true
-    isOracleDnsForwardingEndpointEnabled: true
-    isOracleToAzureDnsZoneSyncEnabled: false
-    dnsListeningEndpointAllowedCidrs: '10.100.0.192/26'
-    dnsForwardingRules: [{
-      domainNames: 'basedb.workshop.internal'
-      forwardingIpAddress: '10.100.0.132'
-    }]
+    isOracleDnsListeningEndpointEnabled: false
+    isOracleDnsForwardingEndpointEnabled: false
+    isOracleToAzureDnsZoneSyncEnabled: true
   }
 }
 
 output networkAnchorId string = anchor.id
 output networkAnchorZone string = zone
-output oracleDnsListeningIp string = anchor.properties.dnsListeningEndpointIpAddress
-output oracleDnsForwardingIp string = anchor.properties.dnsForwardingEndpointIpAddress
 output ociVcnId string = anchor.properties.ociVcnId

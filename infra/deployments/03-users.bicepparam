@@ -2,6 +2,7 @@ using './03-users.bicep'
 
 param location = 'francecentral'
 param workshopGroupId = '12ac252f-9249-47d5-b43c-5b29af74f9d5'
+param organizerObjectId = '8c34642a-9444-4af7-b697-4953f3253126'
 param userObjectIds = {
   mhuser1: '9e1b35c6-be5d-400d-894a-6710749bcc85'
   mhuser2: '154410a6-19f0-4e36-ad22-5fe8ae8c32c0'

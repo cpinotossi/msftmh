@@ -4,38 +4,12 @@ param location string = 'francecentral'
 @minLength(36)
 @maxLength(36)
 param workshopGroupId string
-type ParticipantIdentities = {
-  mhuser1: string
-  mhuser2: string
-  mhuser3: string
-  mhuser4: string
-  mhuser5: string
-  mhuser6: string
-  mhuser7: string
-}
-
-param userObjectIds ParticipantIdentities
 param firewallPrivateIp string
 
-var participants = ['mhuser1', 'mhuser2', 'mhuser3', 'mhuser4', 'mhuser5', 'mhuser6', 'mhuser7']
 var readerRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')
 
 resource shared 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: 'rg-odaa-shared'
-  location: location
-}
-
-resource dbGroups 'Microsoft.Resources/resourceGroups@2024-03-01' = [for participant in participants: {
-  name: 'rg-odaa-${participant}'
-  location: location
-  tags: {
-    Project: 'OracleWorkshop'
-    Participant: participant
-  }
-}]
-
-resource testGroup 'Microsoft.Resources/resourceGroups@2024-03-01' = {
-  name: 'rg-odaa-test'
   location: location
 }
 
@@ -52,7 +26,7 @@ resource dbCreator 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
   name: guid(subscription().id, 'oracle-workshop-basedb-creator')
   properties: {
     roleName: 'Oracle Workshop BaseDB Creator'
-    description: 'Manage BaseDB only in the assigned participant resource group; shared networking and anchors are read-only.'
+    description: 'Manage all BaseDB systems in the shared workshop resource group; networking and anchors are read-only.'
     type: 'CustomRole'
     assignableScopes: [subscription().id]
     permissions: [{
@@ -101,14 +75,14 @@ resource catalogAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-module dbAccess './modules/db-access.bicep' = [for (participant, i) in participants: {
-  name: 'db-access-${participant}'
-  scope: dbGroups[i]
+module dbAccess './modules/db-access.bicep' = {
+  name: 'db-access-shared'
+  scope: shared
   params: {
-    userObjectId: userObjectIds[participant]
+    groupObjectId: workshopGroupId
     roleDefinitionId: dbCreator.id
   }
-}]
+}
 
 output odaaVnetId string = network.outputs.odaaVnetId
 output odaaSubnetId string = network.outputs.odaaSubnetId

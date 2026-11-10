@@ -1,197 +1,156 @@
 ---
-title: Create an Oracle Base Database@Azure DB system
-description: Provision a private single-node Base Database and a workshop PDB.
+title: Create User2's Base Database in the Azure portal
+description: Create basedb2 in the Azure portal, from sign-in to starting the deployment.
 ---
 
-## Challenge 2: Create a Base Database
+## Challenge 2: Create User2's Base Database
 
-[Back to the workshop](../../README.md)
+[Workshop overview](../../README.md)
 
-Base Database uses a DB system, a container database (CDB), and one or more
-pluggable databases (PDBs). It is not the Autonomous Database creation wizard.
-Use the Base Database service in Oracle Database@Azure. Depending on the portal
-experience, database provisioning opens the linked OCI console.
+> [!WARNING]
+> **User2 is only an example.** Replace `mhuser2`, `vm-mhuser2`,
+> `rg-vm-mhuser2` and `basedb2` with your own assigned user
+> number and resource names. Tenant, subscriptions, shared networking and PDB
+> `WORKSHOP` stay the same.
 
-## Approved workshop target
+This example uses participant **User2** (`mhuser2@cptdemo.org`) and creates
+**`basedb2`** using the prepared subscription, permissions and shared networking.
+Creation takes place entirely in the Azure portal.
 
-| Setting | Workshop value |
-|---------|----------------|
-| Azure subscription / resource group | ODAA subscription / your own `rg-odaa-mhuserN` |
-| Region | France Central |
-| Availability zone | Same zone as the assigned Network Anchor |
-| Deployment | One single-node DB system per participant, no RAC |
-| Edition / license | Enterprise Edition / License Included |
-| Database version | Oracle 26ai, using an exact version offered in this region |
-| Shape | Organizer-approved supported VM shape; candidate `VM.Standard.x86` |
-| Compute | Explicitly approved count within the selected shape's limits |
-| Initial data storage | 256 GB candidate, subject to shape constraints and approval |
-| DB system / hostname | Organizer-assigned name for `mhuser1` through `mhuser7` |
-| CDB / PDB | `BASEN` / `WORKSHOPN`, using your participant number |
-| Listener | TCP 1521 on the private network |
-| SSH access | Your public key; keep the private key local |
+## Step 1: Open the Azure portal
 
-> [!IMPORTANT]
-> Shape, compute and the exact 26ai version are not yet regionally validated.
-> Do not deploy until the organizer confirms them. `cpuCoreCount`, OCPUs and
-> ECPUs are not interchangeable. Do not copy ADB's compute or 20 GB storage
-> settings. Oracle documents 256 GB as the minimum Base Database data storage;
-> recovery and software volumes add storage and cost.
+1. Open [portal.azure.com](https://portal.azure.com/) in a private browser window.
+2. Sign in as `mhuser2@cptdemo.org` and complete MFA if prompted.
+3. If necessary, use the account menu to switch to directory
+   `8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5`.
+4. In the search bar, search for **Oracle AI Database@Azure** and open the service.
+![search Oracle AI Database@Azure in the azure portal](media/image.png)
+5. In the left menu, select **Oracle Base Database Service**, then **+ Create**.
+![Oracle Base Database Service create](media/image%20copy.png)
+The following steps follow the tabs across the top of the form.
+Subheadings identify sections inside a tab, using the portal's English labels.
 
-Organizers can inspect the regional catalogs without deploying:
+## Step 2: Basics tab
 
-```bash
-az oracle-database database-system-shape list \
-  --subscription sub-mhodaa --location francecentral -o json
-az oracle-database db-system-db-version list \
-  --subscription sub-mhodaa --location francecentral -o json
-```
+### Project details
 
-Use the exact API version string from the catalog, not an assumed literal
-`26ai`. If 26ai is unavailable, stop and agree an alternative with the organizer.
-Also check the tenancy's region subscription, service quotas, availability zone
-mapping, and estimated costs for the total participant count.
+| Field | Value for User2 |
+|-------|-----------------|
+| Subscription | `odaa` (`4ce5b5cc-e869-451f-98fc-f50448849ee0`) |
+| Resource group | Existing `rg-odaa-shared` |
 
-## Verify the prepared infrastructure
+### System Information
 
-In the ODAA subscription, open `rg-odaa-shared` and verify:
+| Field | Value for User2 |
+|-------|-----------------|
+| Name | `basedb2` |
+| Region | `France Central` |
+| Resource Anchor | Existing `anchor-odaa-shared` |
+| Availability zone | `1` |
+| Shape | `VM.BaseDB.x86` |
+| Database version | `26ai` (`26.0.0.0.0`, if the full version is shown) |
+| ECPU count | `4` |
+| Oracle Database edition | `Standard Edition` |
 
-* `vnet-odaa-shared` and `snet-odaa-delegated`
-* Subnet delegation to `Oracle.Database/networkAttachments`
-* Resource Anchor `anchor-odaa-shared`
-* Central Network Anchor `nw-anchor-workshop`
-* Connected peering to `vnet-workshop-hub`, not directly to your spoke
+### Storage
 
-Bicep prepares these resources after Oracle onboarding. Your own VM is in
-`rg-vm-mhuserN` and `vnet-vm-mhuserN`; its traffic reaches Oracle through the
-hub firewall. Do not recreate shared resources or change their address space.
+| Field | Value for User2 |
+|-------|-----------------|
+| Available data storage (GB) | `256` |
 
-## Select the centrally managed Network Anchor
+### Security
 
-Network Anchors connect the delegated Azure subnet to OCI networking. They are
-zonal: the DB system must use the same region and zone.
+1. Select **Generate new key pair** for **SSH public key source**.
+2. Enter `basedb2-key` as the **Key pair name**.
 
-1. Open Oracle Database@Azure, Multicloud Resources, Network Anchors.
-2. Select `nw-anchor-workshop`. Participants do not create, change or delete it.
-3. Use `rg-odaa-shared`, France Central, the approved zone,
-   `anchor-odaa-shared`, `vnet-odaa-shared`, and `snet-odaa-delegated`.
-4. Review the required client and backup subnet configuration for the selected
-   shape. Do not invent an overlapping backup CIDR.
-5. Inspect the enabled DNS listening/forwarding endpoints. Azure Oracle-domain
-   queries arrive from the hub resolver outbound subnet; Oracle Azure-domain
-   queries are forwarded to resolver inbound IP `10.100.0.132`.
-6. Do not apply participant cleanup tags to this shared anchor.
-7. Verify successful provisioning before creating your DB system.
+### Advanced Options
 
-The Azure private zone is centrally managed in `rg-workshop-hub`.
-Oracle's native hostname domain is resolved through the Network Anchor
-listening endpoint. The organizer configures the actual OCI subnet domain and
-listening IP in the Azure forwarding ruleset.
+Leave the default values unchanged.
 
-> [!NOTE]
-> Use only your assigned anchor and subnet capacity. If the service rejects an
-> additional anchor in the prepared subnet, stop and ask the organizer to assign
-> an existing compatible anchor or provision separate delegated subnet capacity.
-> Do not delete another participant's anchor.
+Select **Next** to open the **Configuration** tab.
 
-## Create the DB system and initial PDB
+![Basics tab](media/image%20copy%202.png)
+## Step 3: Configuration tab
 
-1. Select Oracle Base Database Service, Create DB system. Do not select
-   Autonomous Database.
-2. Select your own `rg-odaa-mhuserN`, shared Resource Anchor/linked compartment,
-   shared Network Anchor and matching region/zone.
-3. Enter the unique DB system name and hostname assigned by the organizer.
-4. Select the approved shape, compute count, Enterprise Edition, License
-   Included, and data storage allocation.
-5. Upload an SSH public key. If you need a key, run the following locally and
-   upload only the `.pub` file. Do not overwrite an existing key.
+1. Set **PDB name** to `WORKSHOP`.
+2. Under **Administrator credentials**, leave **Username** as `sys`.
+3. Enter and confirm a new administrator password. Use 24 characters containing
+   at least two uppercase letters, two lowercase letters, two digits and two
+   special characters from `_`, `#`, `-`.
+4. Save the password securely. You will need it later to connect as `SYSTEM`;
+   it cannot be read back from the Azure resource.
+5. Select **Next** to open the **Networking** tab.
 
-   ```bash
-   ssh-keygen -t rsa -b 4096 -f "$HOME/.ssh/odaa-basedb-mhuserN"
-   ```
+![Networking tab](media/image%20copy%203.png)
 
-6. Use the private client subnet associated with the assigned anchor. Do not
-   expose the database listener to the internet.
-7. Select the actual regional 26ai database image/version approved by the
-   organizer. Enter CDB name `BASEN` and PDB name `WORKSHOPN`.
-8. Enter the administrator password and confirm the TDE wallet configuration.
-   Store credentials outside the repository. Follow the portal's password
-   requirements; Oracle's current guide requires 9 to 30 characters with at
-   least two uppercase, lowercase, numeric and special characters (`_`, `#`, `-`).
-9. For this disposable workshop, disable automatic backups if the organizer has
-   approved doing so. This is not a production backup recommendation.
-10. Set the DB system tags to `workshop=odaa`,
-    `managed-by=workshop-base-db`, and `automation-owner=participant-mhuserN`.
-    These tags apply only to your database, not to the shared anchor. Without them cleanup
-    intentionally leaves the database running.
-11. Review the full cost and settings, then create the DB system.
+## Step 4: Networking tab
 
-Provisioning can take substantially longer than ADB provisioning. Wait for
-successful provisioning and the OCI `AVAILABLE` lifecycle state. Treat a failed
-or timed-out deployment as a failure, not as permission to continue.
+1. Leave **Select Resource Anchor and Network Anchor from another subscription
+   or resource group** unchecked.
+2. Verify or select these existing resources:
 
-## Record the connection details
+   | Field | Value |
+   |-------|-------|
+   | Resource Anchor | `anchor-odaa-shared` |
+   | Network Anchor | `nw-anchor-workshop` |
+   | Virtual network | `vnet-odaa-shared` |
+   | Delegated subnet | `snet-odaa-delegated` |
 
-Record the following values from the DB system/node and database/PDB details:
+   The virtual network and subnet are populated from the Network Anchor.
+3. Enter `basedb2` as the **Host name** prefix.
+4. Select **Next** to open the **Diagnostics Collection** tab.
 
-* Azure DB system resource ID and associated Network Anchor ID
-* OCI DB system, node/VNIC and database identifiers
-* The single node's private IPv4 address
-* The actual native Oracle hostname, PDB service name and listener port
+![Diagnostics Collection tab](media/image%20copy%204.png)
 
-Do not use ADB's `privateEndpointIp`, `privateEndpointLabel`, `_high` service or
-ADB connection profile fields. A PDB service name can include a domain and is
-not necessarily equal to the PDB name.
+## Step 5: Diagnostics Collection tab
 
-If the portal does not show the PDB service, the database administrator can
-inspect services on the DB host as the Oracle software owner:
+Leave the diagnostics defaults unchanged, then select **Next** to open the
+**Consent** tab.
 
-```sql
-show pdbs
-select name, network_name, pdb from cdb_services where pdb = 'WORKSHOPN';
-```
+![Consent tab](media/image%20copy%205.png)
 
-The PDB must be open and its service registered with the listener. On the DB
-host, `lsnrctl status` helps verify listener services. Do not guess the service
-name or use the CDB root service for participant exercises.
+## Step 6: Consent tab
 
-## Prepare a limited workshop user
+1. Read the terms and select **I agree to terms of service** if you agree.
+2. Select **Next** to open the **Tags** tab.
 
-The database administrator creates the user in the intended PDB, not in CDB
-root. Use SQL*Plus interactively and enter the administrator password at the
-prompt:
+![Tags tab](media/image%20copy%206.png)
 
-```bash
-sqlplus -L 'sys@//NODE_PRIVATE_IP:1521/ACTUAL_PDB_SERVICE as sysdba'
-```
+## Step 7: Tags tab
 
-Verify the container, then create a limited account. Enter a separate
-workshop password at the hidden prompt; do not reuse the SYS password.
-For this example, choose a password containing only letters, digits, `_`, `#`
-and `-` so SQL*Plus substitution cannot alter the statement.
+Add these tags so the organizer can identify and clean up User2's database:
 
-```sql
-show con_name
-set verify off
-accept workshop_password char prompt 'Workshop password: ' hide
-create user workshop identified by "&workshop_password";
-undefine workshop_password
-grant create session to workshop;
-```
+| Name | Value |
+|------|-------|
+| `workshop` | `odaa` |
+| `managed-by` | `workshop-base-db` |
+| `automation-owner` | `participant-mhuser2` |
 
-Only proceed if `show con_name` reports your assigned workshop PDB. The baseline connectivity
-exercise needs `CREATE SESSION`, not DBA privileges.
+Select **Next** to open the **Review + create** tab.
 
-## Success criteria
+![Review + create tab](media/image%20copy%207.png)
 
-* The DB system is available with the approved version, shape and license.
-* The PDB is open and the correct PDB service is known.
-* The node has a private address in the assigned network.
-* The `WORKSHOP` account exists in the intended PDB.
+## Step 8: Review + create tab
 
-Continue with [networking and DNS](../update-odaa-basedb-nsg-dns/update-odaa-basedb-nsg-dns.md).
+1. Check that the summary shows `basedb2`, `France Central`, zone `1`,
+   `VM.BaseDB.x86`, `4` ECPUs, `256 GB`, `Standard Edition` and PDB `WORKSHOP`.
+2. Wait for validation to pass, then select **Create**. This starts a paid deployment.
 
-## References
+![Deployment progress page](media/image%20copy%208.png)
 
-* [Oracle Base Database creation](https://docs.oracle.com/en-us/iaas/Content/database-at-azure/azucr-create-base-database.html)
-* [Network Anchor design](https://docs.oracle.com/en-us/iaas/Content/database-at-azure/network-anchor-design.htm)
-* [Azure DB system CLI](https://learn.microsoft.com/cli/azure/oracle-database/db-system)
+3. The SSH key download dialog appears, download the private key and confirm
+   creation. Keep the key securely on your computer; do not share or commit it.
+   The download is offered only once.
+
+   ![Deployment progress page](media/image%20copy%209.png)
+
+4. The deployment progress page opens. The task is complete once the deployment
+   has started.
+
+   ![Deployment progress page](media/image%20copy%2011.png)
+
+
+
+Reference: [Oracle's Azure portal creation instructions](https://docs.oracle.com/en-us/iaas/Content/database-at-azure/azucr-create-base-database.html).
+
+Next: [Configure NSG rules](../configure-odaa-basedb-nsg/configure-odaa-basedb-nsg.md).

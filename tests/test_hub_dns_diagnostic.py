@@ -83,12 +83,29 @@ class DiagnosticTests(unittest.TestCase):
         execute.assert_not_called()
 
     def test_missing_nonzero_or_duplicate_guest_success_marker_fails(self):
-        def response(output="BIDIRECTIONAL_DNS_OK", exit_code=0):
+        def response(output="REPLICATED_DNS_OK", exit_code=0):
             return {"properties": {"provisioningState": "Succeeded", "instanceView": {
                 "executionState": "Succeeded", "exitCode": exit_code, "output": output,
             }}}
         for value in ({}, response(""), response(exit_code=1), response(exit_code="0"),
-                      response("BIDIRECTIONAL_DNS_OK\nBIDIRECTIONAL_DNS_OK")):
+                      response("REPLICATED_DNS_OK\nREPLICATED_DNS_OK"), response("BIDIRECTIONAL_DNS_OK")):
             with self.assertRaises(ValueError):
-                diagnostic.validate(value, "BIDIRECTIONAL_DNS_OK")
-        self.assertEqual(diagnostic.validate(response(), "BIDIRECTIONAL_DNS_OK"), "BIDIRECTIONAL_DNS_OK")
+                diagnostic.validate(value, "REPLICATED_DNS_OK")
+        self.assertEqual(diagnostic.validate(response(), "REPLICATED_DNS_OK"), "REPLICATED_DNS_OK")
+
+    def test_replicated_probe_requires_its_marker_and_no_oracle_endpoint(self):
+        config = {
+            "TEST_HUB_VNET_ID": diagnostic.HUB_ID,
+            "TEST_HUB_RESOLVER_INBOUND_IP": "10.100.0.132",
+            "TEST_FIREWALL_PRIVATE_IP": "10.100.0.4",
+            "TEST_DB_HOST": "node.actual.example", "TEST_DB_IP": "192.168.0.10",
+            "TEST_CENTRAL_DNS_ZONE_NAME": "basedb.workshop.internal",
+        }
+        with patch.dict(os.environ, BASE_DB_OWNER=OWNER), \
+             patch.object(diagnostic, "require_owned"), \
+             patch.object(Path, "read_text", return_value=json.dumps(config)), \
+             patch.object(diagnostic.db, "execute_run_command", return_value="REPLICATED_DNS_OK") as execute, \
+             contextlib.redirect_stdout(io.StringIO()):
+            diagnostic.probe()
+        self.assertIn("--replicated-dns", execute.call_args.args[2])
+        self.assertEqual(execute.call_args.args[3], {})

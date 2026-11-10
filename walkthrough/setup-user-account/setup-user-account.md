@@ -1,64 +1,87 @@
 ---
 title: Set up your workshop account
-description: Sign in with your assigned mhuser identity, register MFA and verify isolated resource access.
+description: Sign in with your assigned identity and connect to your private VM through Bastion.
 ---
 
 ## Challenge 0: Set up your account
 
-[Back to the workshop](../../README.md)
+[Workshop overview](../../README.md)
 
-The workshop has exactly seven identities, `mhuser1` through `mhuser7`, in
-tenant `8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5`. Use your organizer-provided UPN
-and initial password, not an account from the previous workshop tenant.
+> [!WARNING]
+> **User2 is only an example.** Replace `mhuser2`, `vm-mhuser2`,
+> `rg-vm-mhuser2` and `basedb2` with your own assigned user
+> number and resource names. Tenant, subscriptions, shared networking and PDB
+> `WORKSHOP` stay the same.
 
-## Sign in and register MFA
+Use the Azure portal in your browser. Open your VM shell through the prepared
+Bastion host; no local terminal or Azure CLI is needed.
 
-1. Open a private browser window or a separate browser profile.
-2. Sign in to the [Azure portal](https://portal.azure.com/) using your assigned
-   account, for example `mhuser1@mngenvmcap956455.onmicrosoft.com`.
-3. Change the initial password when prompted.
-4. Complete the tenant's MFA registration prompts. Use
-   [Microsoft's MFA guide](https://learn.microsoft.com/entra/identity/authentication/tutorial-enable-azure-mfa)
-   if you need help.
-5. Verify the selected directory is the new workshop tenant.
+## Step 1: Sign in
 
-Do not share your password, MFA registration information or session tokens.
+1. Open the [Azure portal](https://portal.azure.com/) in a private browser window.
+2. Sign in with your assigned account, for example `mhuser2@cptdemo.org`.
+3. Complete the initial password change and MFA.
+4. In the account menu, verify that you are using directory
+   `8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5`.
 
-## Verify your access
+Do not put passwords, MFA codes or tokens into shell commands or shared output.
 
-For `mhuser1`, expect the following. Replace `1` with your assigned number.
+## Step 2: Inspect both subscriptions
 
-| Resource / scope | Access |
-|------------------|--------|
-| Workshop `rg-vm-mhuser1` | Contributor, without role-assignment rights |
-| Your `vm-mhuser1` | Virtual Machine User Login |
-| Workshop `rg-workshop-hub` | Reader only |
-| Workshop `rg-workshop-images` | Reader only |
-| ODAA `rg-odaa-mhuser1` after Phase B | Restricted BaseDB creator role |
-| Shared Oracle infrastructure after Phase B | Reader and required catalog-read actions |
+1. In the Azure portal search bar, search for **Subscriptions** and open
+   the service.
+2. Open subscription `aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483`. It contains the
+   client VMs and Bastion. Check its subscription ID on **Overview**.
+3. Return to **Subscriptions** and open `odaa`
+   (`4ce5b5cc-e869-451f-98fc-f50448849ee0`). It contains the Oracle resources.
+4. Verify that both belong to directory
+   `8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5`.
 
-The hub and all VM spokes are in workshop subscription
-`aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483`. Oracle resources are in
-`4ce5b5cc-e869-451f-98fc-f50448849ee0`.
+## Step 3: Connect to your VM
 
-You may inspect firewall, DNS resolver, routing and central DNS settings to
-learn the architecture. You cannot modify shared resources or another
-participant's spoke. Report missing access to the organizer; do not request
-Owner or subscription-wide Contributor as a workaround.
+1. In the portal search bar, search for **Virtual machines** and open the service.
+2. Open your VM, for example `vm-mhuser2` in `rg-vm-mhuser2` for User2.
+3. On **Overview**, check that its status is **Running**. If it is stopped,
+   select **Start** and wait until it is running.
+4. Select **Connect > Connect via Bastion** and use `bas-workshop-hub`.
+5. Under **Connection settings**, select **SSH**, port `22`, and
+   **Microsoft Entra ID** as the **Authentication type**.
+6. Select **Connect** and allow popups. Your VM shell opens in a Bastion
+   browser tab.
 
-## Connect to your VM
+## Step 4: Inspect your VM session
 
-After the organizer confirms the image and VM deployments are complete:
+In the **VM shell in the Bastion browser tab**, display the machine name:
 
 ```bash
-az login --tenant 8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5
-az network bastion ssh \
-  --subscription aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483 \
-  --name bas-workshop-hub \
-  --resource-group rg-workshop-hub \
-  --target-resource-id /subscriptions/aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483/resourceGroups/rg-vm-mhuser1/providers/Microsoft.Compute/virtualMachines/vm-mhuser1 \
-  --auth-type AAD
+hostname
 ```
 
-Use your own VM name and resource group. If only the spoke network exists
-because image/SKU capacity is pending, VM login is not ready yet.
+For User2, the result is `vm-mhuser2`. Display your Linux login name:
+
+```bash
+whoami
+```
+
+End the VM session:
+
+```bash
+exit
+```
+
+This closes the shell session in the Bastion browser tab, not the Azure portal.
+
+## Your access
+
+| Scope | Participant access |
+|-------|--------------------|
+| Own `rg-vm-mhuserN` | Contributor |
+| Own `vm-mhuserN` | Entra SSH with Virtual Machine User Login |
+| `rg-workshop-hub` and `rg-workshop-images` | Reader |
+| `rg-odaa-shared` in the ODAA subscription | BaseDB management; shared infrastructure read-only |
+| Tagged workshop OCI NSG | View details and change security rules; add only your own client SQL rule |
+
+This is a shared database-management lab. Work only on your assigned database,
+even though the group can manage all participant databases.
+
+Next: [Understand the ODAA subscription](../create-odaa-subscription/create-odaa-subscription.md).

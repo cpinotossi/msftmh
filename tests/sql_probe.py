@@ -6,7 +6,9 @@ import os
 from pathlib import Path
 import socket
 import stat
+import statistics
 import sys
+import time
 
 
 def resolve():
@@ -15,7 +17,23 @@ def resolve():
         raise ValueError("Unexpected DNS result")
 
 
-def probe():
+def measure_latency(cursor):
+    samples = []
+    for index in range(11):
+        started = time.perf_counter()
+        cursor.execute("SELECT 1 FROM dual")
+        if cursor.fetchone() != (1,):
+            raise ValueError("Unexpected SQL value during latency measurement")
+        elapsed = (time.perf_counter() - started) * 1000
+        if index:
+            samples.append(elapsed)
+    return {
+        "samples": len(samples), "unit": "ms",
+        "min": min(samples), "median": statistics.median(samples), "max": max(samples),
+    }
+
+
+def probe(measure=False):
     import oracledb
 
     path = Path("/etc/oracle-workshop/base-db-test.json")
@@ -30,6 +48,7 @@ def probe():
         if not isinstance(credentials.get(key), str) or not credentials[key]:
             raise ValueError("Missing SQL credentials")
     # Host/service are authoritative discovery outputs, not supplied by the secret.
+    oracledb.init_oracle_client()
     params = oracledb.ConnectParams(
         host=os.environ["TEST_DB_HOST"],
         port=int(os.environ["TEST_DB_PORT"]),
@@ -43,6 +62,8 @@ def probe():
             row = cursor.fetchone()
             if row != (os.environ["TEST_DB_PDB"].upper(), 1):
                 raise ValueError("SQL connected to the wrong container or returned an unexpected value")
+            if measure:
+                return measure_latency(cursor)
 
 
 if __name__ == "__main__":
@@ -53,6 +74,8 @@ if __name__ == "__main__":
         elif not sys.argv[1:]:
             probe()
             print("SQL_PDB_OK")
+        elif sys.argv[1:] == ["--latency"]:
+            print(json.dumps(probe(measure=True), indent=2))
         else:
             raise ValueError("Unexpected arguments")
     except Exception:

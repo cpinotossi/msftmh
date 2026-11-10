@@ -23,7 +23,7 @@ Each deployment has a small parameter file. There is no configurable participant
 count or runtime inventory discovery. Bicep loops expand only the seven literal
 participants.
 
-New Entra object IDs and the firewall/Oracle DNS endpoint addresses must be
+New Entra object IDs, the firewall address and the actual replicated DNS zone must be
 copied from their successful creation outputs. Empty placeholders are not valid
 deployment inputs. Keep passwords and private SSH keys out of parameter files.
 
@@ -52,8 +52,8 @@ write permissions, create users or store a client secret.
 
 Set repository Actions variable `AZURE_CLIENT_ID` to the printed client ID.
 The tenant and subscription IDs remain static in the workflows.
-`AZURE_AUTH_MODE`, `IMAGE_BUILD_RUNNER`, runner `ARM_CLIENT_ID` and `TF_STATE_*`
-settings are no longer active inputs. Remove old environment-level
+There are no runner/authentication mode overrides or Terraform backend inputs.
+Remove old environment-level
 `AZURE_CLIENT_ID` overrides so the seven test jobs use the same new identity.
 
 The initial trust accepts only
@@ -83,8 +83,8 @@ complete. OCI API credentials and the actual DNS/PDB probe behavior still requir
 live Phase-B validation.
 
 The test workflow creates a temporary private
-[hub DNS diagnostic VM](hub-dns-diagnostic.bicep) for direct resolver and Oracle
-endpoint queries; participant VMs retain firewall-only DNS.
+[hub DNS diagnostic VM](hub-dns-diagnostic.bicep) for resolver and firewall
+queries; participant VMs retain firewall-only DNS.
 Stage 02 reserves `snet-dns-diagnostic` (`10.100.1.0/28`) and its internet route
 through the firewall. On an already deployed hub, apply
 [hub-dns-diagnostic-network.bicep](hub-dns-diagnostic-network.bicep) to
@@ -94,18 +94,6 @@ VM, NIC, NSG and disk are deleted after each test using
 run-specific ownership checks. See [diagnostic recovery](../../tests/README.md)
 for interrupted runs and Azure-only smoke checks. The temporary VM has costs
 while allocated; no permanent internal GitHub runner is created.
-
-During migration, disable the old remote workflows before removing obsolete
-`TF_*` repository variables. Keep the legacy shared deployment, workshop
-deployment, user reset and Terraform import workflows disabled. The image,
-test and cleanup paths are reused, so keep those workflows paused until their
-hosted-OIDC replacements are reviewed and published. Then re-enable them:
-
-```bash
-gh workflow enable odaa-build-image.yml --repo cpinotossi/msftmh
-gh workflow enable odaa-test-workshop.yml --repo cpinotossi/msftmh
-gh workflow enable odaa-cleanup-workshop.yml --repo cpinotossi/msftmh
-```
 
 Verify hosted OIDC and the fixed roster with the read-only identity workflow
 before starting an infrastructure deployment:
@@ -125,7 +113,7 @@ Azure runner infrastructure, storage accounts or state files.
 
 | Step | Entry point | Scope | Dependency |
 |------|-------------|-------|------------|
-| 1 | Stateless identity creation under [identity/](../identity/README.md) | New Entra tenant | Authorized directory administrator |
+| 1 | Stateless identity creation with [provision.ps1](../identity/provision.ps1) | New Entra tenant | Authorized directory administrator |
 | 2 | [02-hub.bicep](02-hub.bicep) | Workshop `rg-workshop-hub` | None |
 | 2a | [02-image-gallery.bicep](02-image-gallery.bicep) | Workshop `rg-workshop-images` | None |
 | 2b | [Packer image build](../packer/README.md) | Workshop temporary build RG and gallery | Gallery and an available build VM SKU |
@@ -133,9 +121,32 @@ Azure runner infrastructure, storage accounts or state files.
 | 3b | [03-user-vms.bicep](03-user-vms.bicep) | Workshop subscription | Seven connected spokes, published image and VM capacity |
 
 Step 3a creates seven resource groups, VNets, NSGs, routes, bidirectional
-hub peerings, participant Contributor assignments and group Reader access to the
-hub and image gallery. It creates no VMs and
+hub peerings, participant Contributor assignments, organizer VM Administrator
+Login assignments and group Reader access to the hub and image gallery. It creates no VMs and
 can complete even when the image build or VM capacity is blocked.
+
+`organizerObjectId` in [03-users.bicepparam](03-users.bicepparam) identifies
+`admin@cptdemo.org`. Stage 3a grants that user Virtual Machine Administrator Login
+on each of the seven `rg-vm-mhuserN` groups, enabling Entra SSH and sudo on their
+VMs through the shared Bastion. Participant VM User Login remains scoped to the
+participant's own VM. No organizer group membership or new subscription-wide
+role is added.
+
+The organizer already has inherited Owner access to both subscriptions,
+including Bastion, NICs, networks and the shared Oracle resource group.
+Owner covers Azure resource management, but does not include the VM login
+data actions. The explicit VM Administrator Login grants provide that missing
+access; they do not grant Oracle SQL users or OCI API permissions.
+
+The seven grants were applied and verified in the live workshop. Organizer
+Entra certificate login and passwordless sudo through Bastion passed on VM 1,
+without an SSH-key fallback. VMs 2-7 were deallocated and were left off;
+their end-to-end SSH checks and participant-account logins remain pending.
+
+To apply only these role assignments on an existing lab, use
+[spoke-access.bicep](modules/spoke-access.bicep) per participant resource group
+with its matching `userObjectId` and the configured `organizerObjectId`.
+Preview first and deploy in incremental mode. This avoids redeploying VMs or networks.
 
 Step 3b creates exactly seven private `Standard_D2as_v7` VMs in zone 2 from image version
 `1.1.0`, Entra SSH login extensions, VM User Login assignments and central
@@ -222,18 +233,25 @@ Do not use `az deployment subscription`.
 | 4 | [04-oracle-network.bicep](04-oracle-network.bicep) | Oracle subscription |
 | 5 | [05-oracle-connectivity.bicep](05-oracle-connectivity.bicep) | Workshop subscription; modules configure both subscriptions |
 | 6 | [06-network-anchor.bicep](06-network-anchor.bicep) | Oracle `rg-odaa-shared` |
-| 7 | [07-oracle-dns.bicep](07-oracle-dns.bicep) | Workshop `rg-workshop-hub` |
-| 8 | [BaseDB lab](../../walkthrough/create-odaa-basedb/create-odaa-basedb.md) | Assigned `rg-odaa-mhuserN` |
+| 7 | [07-oracle-dns.bicep](07-oracle-dns.bicep) | Oracle `rg-odaa-shared`; links the workshop hub |
+| 8 | [BaseDB lab](../../walkthrough/create-odaa-basedb/create-odaa-basedb.md) | Oracle `rg-odaa-shared` for all seven participants |
 
 Before Phase B, verify OracleSubscription `default` has provisioning state
 `Succeeded` and cloud account state `Available`. Do not treat `Accepted`,
 `Pending`, a failed details query or a successful what-if as completed onboarding.
 
-Step 4 creates the shared Oracle VNet, delegated subnet and Resource Anchor
-`anchor-odaa-shared`, seven isolated database resource groups, and `rg-odaa-test`.
-Participants get Oracle Reader access plus a narrow BaseDB creator role only
-in their own database group. Shared anchors and network resources are not
-participant-writable.
+Step 4 creates `rg-odaa-shared`, the Oracle VNet, delegated subnet and Resource
+Anchor `anchor-odaa-shared`. All seven users deploy their databases into this
+same resource group in ODAA subscription `4ce5b5cc-e869-451f-98fc-f50448849ee0`.
+This also satisfies the service's requirement that a DB system and its Resource
+Anchor share a resource group. No per-participant Oracle resource groups or
+separate test resource group are created.
+
+The participant group gets Oracle Reader/catalog access and a narrow BaseDB
+creator role on `rg-odaa-shared`. It can manage all BaseDB systems there,
+including databases created by other participants. Shared anchors and network
+resources are not participant-writable. Azure VM spokes remain individually
+scoped. Existing obsolete participant groups are not automatically deleted.
 
 Step 4 also prepares the static return route table on the Oracle subnet.
 Step 5 adds hub-to-Oracle peering and Oracle firewall rules.
@@ -242,37 +260,72 @@ broader Oracle VNet prefix. Peering alone is not transitive.
 
 Step 6 creates one centrally owned `nw-anchor-workshop`. Verify the approved
 region/zone mapping before deploying it. All BaseDB systems must match that
-anchor's zone and region. Its listening endpoint accepts requests from the
-resolver outbound subnet `10.100.0.192/26`. Its forwarding rule sends
-`basedb.workshop.internal` queries to `10.100.0.132`.
+anchor's zone and region. Native Oracle-to-Azure DNS zone replication is enabled;
+the listening and forwarding endpoints are disabled. The provider does not
+permit changing these DNS flags on an existing anchor. Replacing an anchor with
+dependent databases requires explicit approval for database recreation and data loss.
 
-For step 7, copy the actual listening IP and OCI subnet DNS domain, including
-the trailing dot, into [07-oracle-dns.bicepparam](07-oracle-dns.bicepparam).
-Do not guess these values from a VCN label.
+On the first deployment, create one approved BaseDB after step 6 and before
+step 7. Oracle creates the replicated Azure private DNS zone and records during
+database provisioning. Discover that actual zone in `rg-odaa-shared`; do not
+create an empty substitute zone or guess its name from the requested VCN label.
+Copy its name, without a trailing dot, into
+[07-oracle-dns.bicepparam](07-oracle-dns.bicepparam), then deploy step 7 in the
+ODAA subscription. It adds only a non-registering hub VNet link to the existing
+zone and preserves the service-created Oracle VNet link and records.
+Subsequent automation reads all four canonical deployments, including step 7,
+before creating its test database.
 
 ```text
-Azure -> Oracle:
-VM -> firewall DNS proxy -> resolver inbound -> outbound ruleset
-   -> Network Anchor listening endpoint -> Oracle private DNS
-
-Oracle -> Azure:
-Oracle DNS -> Network Anchor forwarding endpoint -> resolver inbound
-           -> central Azure private DNS zone
+Database creation: Oracle private DNS -> replicated Azure private DNS zone
+Client lookup: VM -> firewall DNS proxy -> resolver inbound
+                 -> hub-linked replicated Azure private DNS zone
 ```
 
-Only the actual Oracle domain is forwarded to Oracle. Do not forward the Azure
-private zone or a wildcard domain back to Oracle: that creates a DNS loop.
-Verify UDP and TCP 53 in both directions, DNS endpoint OCI NSG rules, Oracle
-listener security, effective routes and SQL connectivity before the workshop.
-OCI policies must also isolate participant database operations.
+When migrating from conditional forwarding, retire only the obsolete
+`oracle-vcn` forwarding rule after verifying the replicated zone and hub link.
+Do not delete the shared resolver or unrelated rules.
+Verify the actual A record against the OCI node IP and test UDP/TCP DNS through
+the resolver and firewall. Oracle-to-Azure name resolution is separately pending,
+not part of replicated-DNS acceptance. Verify Oracle listener security,
+effective routes and real PDB SQL connectivity before enabling Phase B.
+OCI policies must match the approved shared-lab access model.
+
+Oracle-side database NSG rules are not exposed by the Bicep
+`Oracle.Database/dbSystems` resource. During the workshop, participants add
+their own SQL ingress rule in
+[Challenge 3](../../walkthrough/configure-odaa-basedb-nsg/configure-odaa-basedb-nsg.md).
+The `mh-workshop-participants-nsg-rules` policy grants only
+`NETWORK_SECURITY_GROUP_UPDATE_SECURITY_RULES`, limited to the workshop
+compartment and NSGs tagged
+`OracleWorkshopAccess.ParticipantNsgRules=enabled`. Only the approved shared
+workshop NSG carries this tag. Participants cannot change NSG tags, but their
+rule permission is not isolated to their own rule within the shared group.
+Oracle default rules must remain unchanged.
+
+For separate organizer/CI validation after the exercise, the versioned
+[SQL ingress configuration](../../tests/workshop_config.json) and
+[OCI reconciliation command](../../tests/README.md#reproducible-oracle-sql-ingress)
+add stateful TCP 1521 access from exactly the seven client networks to the actual
+DB node NSG. The command verifies live scope and preserves provider rules.
+The test workflow includes this step; no OCI secrets are embedded in Bicep.
+Do not run the reconciliation or test workflow before participants finish
+their rule-creation exercise: it would add all seven client rules in advance.
+
+The [participant Markdown guides](../../README.md#challenges) reuse these shared
+resources. Assigned DB names are `basedb1` through `basedb7`; CI keeps
+`basetest01` through `basetest07`. Participants create databases in the portal
+and copy private DNS/TCP/SQL checks into a Bastion SSH terminal. Organizer-owned
+discovery and OCI NSG commands use local OCI credentials. Cleanup remains a
+separate, owner-filtered organizer operation.
 
 ## Billing boundaries and cleanup
 
-Hub, DNS, Bastion, gallery and client resources are in the workshop subscription.
-The Oracle subscription contains required Oracle networking, anchors and
-database resources, not paid hub DNS or firewall infrastructure. Azure networking
-and peering traffic can still incur Oracle-side charges; zero non-Oracle charges
-cannot be guaranteed.
+Hub, central client DNS, Bastion, gallery and client resources are in the workshop
+subscription. Required Oracle networking, anchors, databases and the replicated
+Azure private DNS zone are in the ODAA subscription. The hub resolver and firewall
+remain in the workshop subscription. Private DNS, Azure networking and peering
+can incur ODAA-subscription charges; zero non-Oracle charges cannot be guaranteed.
 
 Use incremental deployments and inspect what-if before reapplying any stage.
 Base spoke route tables already include the future exact Oracle prefix without
@@ -283,9 +336,9 @@ BaseDB cleanup deletes only explicitly owned database resources. It does not
 remove central DNS, anchors, hub, spokes or identities. Review and explicitly
 approve infrastructure teardown separately.
 
-The older Terraform roots under `shared/`, `users/` and `test-runner/` are
-retained for historical state/reference only. They are not the deployment path
-for this environment; the old monolithic apply workflows are retired.
+Historical Terraform and internal-runner sources are available only in Git
+history. Removing their files from this repository does not delete cloud
+resources, ignored local state or credentials.
 
 ## Local checks
 

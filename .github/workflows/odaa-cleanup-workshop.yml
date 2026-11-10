@@ -56,7 +56,7 @@ jobs:
       - name: Delete owned DB systems only
         shell: pwsh
         run: |
-          ./infra/scripts/cleanup-odaa-and-destroy.ps1 `
+          ./infra/scripts/cleanup-base-database.ps1 `
             -SubscriptionId $env:ODAA_SUBSCRIPTION_ID -Confirm:$false
       - name: Renew OIDC for optional diagnostic recovery
         if: always() && inputs.diagnostic_owner != ''

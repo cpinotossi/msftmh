@@ -1,7 +1,9 @@
 """Static contracts for the hosted-runner, new-tenant workshop workflows."""
 
 from pathlib import Path
+import re
 import unittest
+from urllib.parse import unquote
 
 import yaml
 
@@ -47,6 +49,14 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("--role acdd72a7-3385-48ef-bd42-f606fba81ae7", text)
         self.assertIn("resourceGroups/$BASE_DB_VM_RG", text)
         self.assertIn("resourceGroups/$BASE_DB_RESOURCE_GROUP", text)
+        self.assertIn("BASE_DB_NAME: ${{ needs.phase-b-guard.outputs.db_name }}", text)
+        self.assertNotIn('resourceGroups/rg-odaa-shared"; do', text)
+
+    def test_oracle_network_assigns_the_shared_group_without_user_rg_mapping(self):
+        text = (WORKFLOWS / "odaa-deploy-oracle-network.yml").read_text()
+        self.assertIn('workshopGroupId="$GROUP_ID"', text)
+        self.assertNotIn("USER_OBJECT_IDS", text)
+        self.assertIn("4ce5b5cc-e869-451f-98fc-f50448849ee0", text)
 
     def test_gallery_and_immutable_image_guard(self):
         gallery = (WORKFLOWS / "odaa-deploy-image-gallery.yml").read_text()
@@ -70,6 +80,48 @@ class WorkflowTests(unittest.TestCase):
         cleanup = next(s for s in recovery["jobs"]["cleanup"]["steps"]
                        if s.get("run") == "python3 tests/hub_dns_diagnostic.py cleanup")
         self.assertEqual(cleanup["if"], "always() && inputs.diagnostic_owner != ''")
+
+    def test_retired_setup_has_no_executable_entry_points(self):
+        for directory in ("github-runner", "shared", "users", "test-runner"):
+            self.assertEqual(list((ROOT / "infra" / directory).glob("*.tf")), [])
+        self.assertEqual(list((ROOT / "infra/modules").glob("*/*.tf")), [])
+        for path in (
+            "tests/msi_proxy.py", "infra/Dockerfile.token-refresh",
+            "infra/packer/files/adbping.zip", "tests/bicep/base-db-test.json",
+            "infra/deployments/oracle-subscription.json",
+            "infra/ansible/inventory/hosts", "infra/ansible/ansible.cfg",
+        ):
+            self.assertFalse((ROOT / path).exists(), path)
+        walkthroughs = {path.parent.name for path in (ROOT / "walkthrough").glob("*/*.md")}
+        self.assertEqual(walkthroughs, {
+            "setup-user-account", "create-odaa-subscription", "create-odaa-basedb",
+            "verify-odaa-basedb-dns", "connect-odaa-basedb",
+            "configure-odaa-basedb-nsg", "perf-test-odaa-basedb",
+        })
+
+    def test_owned_database_cleanup_uses_the_current_script(self):
+        text = (WORKFLOWS / "odaa-cleanup-workshop.yml").read_text()
+        self.assertIn("./infra/scripts/cleanup-base-database.ps1", text)
+        self.assertNotIn("cleanup-odaa-and-destroy", text)
+        script = (ROOT / "infra/scripts/cleanup-base-database.ps1").read_text()
+        self.assertIn("SupportsShouldProcess", script)
+        self.assertIn("'cleanup', '--subscription'", script)
+        self.assertIn("--dry-run", script)
+
+    def test_current_guide_links_resolve_after_legacy_removal(self):
+        guides = [
+            ROOT / "README.md", ROOT / "infra/README.md",
+            ROOT / "infra/deployments/README.md", ROOT / "infra/identity/README.md",
+            ROOT / "infra/packer/README.md", ROOT / "tests/README.md",
+            *(ROOT / "walkthrough").glob("*/*.md"),
+        ]
+        for guide in guides:
+            for link in re.findall(r"!?\[[^\]]*\]\(([^)]+)\)", guide.read_text()):
+                target = link.split("#", 1)[0]
+                if not target or "://" in target or target.startswith("mailto:"):
+                    continue
+                with self.subTest(guide=str(guide.relative_to(ROOT)), link=target):
+                    self.assertTrue((guide.parent / unquote(target)).exists())
 
 
 if __name__ == "__main__":

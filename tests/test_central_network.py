@@ -17,14 +17,17 @@ PROVIDER = f"/subscriptions/{SUB}/resourceGroups/rg-odaa-shared/providers/Oracle
 ANCHOR = PROVIDER + "/networkAnchors/nw-anchor-workshop"
 RESOURCE = PROVIDER + "/resourceAnchors/anchor-odaa-shared"
 HUB = "/subscriptions/workshop/resourceGroups/hub/providers/Microsoft.Network/virtualNetworks/hub"
+ZONE = f"/subscriptions/{SUB}/resourceGroups/rg-odaa-shared/providers/Microsoft.Network/privateDnsZones/actualvcn.example"
 ENV = {
     "BASE_DB_NETWORK_ANCHOR_IDS_BY_ZONE": json.dumps({"1": ANCHOR}),
     "BASE_DB_RESOURCE_ANCHOR_ID": RESOURCE,
-    "TEST_MHCORE_SUB": "workshop", "TEST_TR_RG": "runner", "TEST_TR_VNET": "runner",
+    "TEST_WORKSHOP_SUBSCRIPTION_ID": "workshop",
+    "TEST_VM_RESOURCE_GROUP": "rg-vm-mhuser1", "TEST_VM_VNET_NAME": "vnet-vm-mhuser1",
     "TEST_HUB_VNET_ID": HUB, "TEST_FIREWALL_PRIVATE_IP": "10.20.0.4",
     "TEST_HUB_RESOLVER_INBOUND_IP": "10.20.1.4",
     "TEST_ODAA_DELEGATED_CIDR": "192.168.0.0/24",
-    "TEST_ORACLE_DNS_LISTENING_IP": "192.168.0.6",
+    "TEST_ODAA_SUBSCRIPTION_ID": SUB, "TEST_ODAA_RG": "rg-odaa-shared",
+    "TEST_ORACLE_DNS_ZONE_ID": ZONE,
     "TEST_DB_HOST": "node.actualsubnet.actualvcn.example", "TEST_DB_IP": "192.168.0.10",
     "TEST_CENTRAL_DNS_ZONE_NAME": "workshop.internal",
 }
@@ -35,8 +38,8 @@ def anchor():
         "zones": ["1"], "tags": {"managed-by": "Terraform"},
         "properties": {
             "provisioningState": "Succeeded", "resourceAnchorId": RESOURCE,
-            "isOracleDnsListeningEndpointEnabled": True, "isOracleDnsForwardingEndpointEnabled": True,
-            "dnsListeningEndpointIpAddress": "192.168.0.6", "dnsForwardingEndpointIpAddress": "192.168.0.7",
+            "isOracleDnsListeningEndpointEnabled": False, "isOracleDnsForwardingEndpointEnabled": False,
+            "isOracleToAzureDnsZoneSyncEnabled": True,
             "ociVcnDnsLabel": "actualvcn", "ociSubnetId": "ocid1.subnet.actual",
             "subnetId": "/subscriptions/odaa/resourceGroups/central/providers/Microsoft.Network/virtualNetworks/oracle/subnets/delegated",
             "cidrBlock": "192.168.0.0/24",
@@ -53,8 +56,10 @@ class CentralAnchorTests(unittest.TestCase):
         self.assertTrue(all(call.args[0] == "GET" for call in rest.call_args_list))
         return result
 
-    def test_selects_existing_zonal_anchor_and_reads_actual_endpoint(self):
-        self.assertEqual(self.check()[2]["properties"]["dnsListeningEndpointIpAddress"], "192.168.0.6")
+    def test_selects_existing_zonal_replication_anchor_without_dns_endpoints(self):
+        properties = self.check()[2]["properties"]
+        self.assertTrue(properties["isOracleToAzureDnsZoneSyncEnabled"])
+        self.assertNotIn("dnsListeningEndpointIpAddress", properties)
 
     def test_missing_zone_does_not_choose_default_anchor(self):
         with self.assertRaises(KeyError):
@@ -65,12 +70,10 @@ class CentralAnchorTests(unittest.TestCase):
             self.check(BASE_DB_RESOURCE_ANCHOR_ID=RESOURCE.replace(SUB, "other"))
         rest.assert_not_called()
 
-    def test_dns_endpoints_label_cidr_zone_and_management_are_required(self):
+    def test_replication_label_cidr_zone_and_management_are_required(self):
         mutations = [
-            ("properties", "isOracleDnsListeningEndpointEnabled", False),
-            ("properties", "isOracleDnsForwardingEndpointEnabled", False),
-            ("properties", "dnsListeningEndpointIpAddress", ""),
-            ("properties", "dnsForwardingEndpointIpAddress", "8.8.8.8"),
+            ("properties", "isOracleDnsListeningEndpointEnabled", True),
+            ("properties", "isOracleToAzureDnsZoneSyncEnabled", False),
             ("properties", "ociVcnDnsLabel", ""),
             ("properties", "ociSubnetId", ""),
             ("properties", "cidrBlock", "192.168.0.0/16"),
@@ -87,7 +90,7 @@ class CentralAnchorTests(unittest.TestCase):
             self.check(resource)
 
     def test_db_only_cleanup_never_enumerates_even_owned_legacy_anchors(self):
-        system = {"id": f"/subscriptions/{SUB}/resourceGroups/rg-odaa-mhuser1/providers/Oracle.Database/dbSystems/test",
+        system = {"id": f"/subscriptions/{SUB}/resourceGroups/rg-odaa-shared/providers/Oracle.Database/dbSystems/test",
                   "tags": {**db.TAGS, "automation-owner": "run"}}
         with patch.object(db, "listing", return_value=[system]) as listing, \
              patch.object(db, "rest", return_value=system) as rest, \
@@ -98,16 +101,16 @@ class CentralAnchorTests(unittest.TestCase):
         self.assertEqual([call.args[0] for call in rest.call_args_list], ["GET", "DELETE"])
         self.assertTrue(all("/dbSystems/" in call.args[1] for call in rest.call_args_list))
 
-    def test_create_deploys_only_isolated_db_with_cross_rg_anchor_ids(self):
+    def test_create_uses_shared_rg_and_selected_name_without_overwriting_other_participants(self):
         args = types.SimpleNamespace(subscription=SUB, zone="1", owner="run",
-                                     shape="VM.Standard.x86", version="26.0.0.0",
+                                     shape="VM.BaseDB.x86", version="26.0.0.0",
                                      compute_model="ECPU", compute=4, storage=256)
         with patch.dict(os.environ, BASE_DB_SYS_PASSWORD="Secret_#12ABcd",
                         BASE_DB_SSH_PUBLIC_KEY="ssh-rsa public-test-key",
-                        BASE_DB_RESOURCE_GROUP="rg-odaa-mhuser1"), \
+                        BASE_DB_RESOURCE_GROUP="rg-odaa-shared", BASE_DB_NAME="basetest01"), \
              patch.object(db, "metadata"), \
              patch.object(db, "central_anchor", return_value=(ANCHOR, RESOURCE, anchor())), \
-             patch.object(db, "listing", return_value=[]), \
+             patch.object(db, "listing", return_value=[{"name": "basetest02"}]), \
              patch.object(db.os, "open", return_value=123), \
              patch.object(db.os, "fdopen", mock_open()), \
              patch.object(db.json, "dump") as dump, \
@@ -119,19 +122,45 @@ class CentralAnchorTests(unittest.TestCase):
         parameters = dump.call_args.args[0]["parameters"]
         self.assertEqual(parameters["networkAnchorId"]["value"], ANCHOR)
         self.assertEqual(parameters["resourceAnchorId"]["value"], RESOURCE)
+        self.assertEqual(parameters["dbSystemName"]["value"], "basetest01")
         argv = command.call_args.args[0]
-        self.assertEqual(argv[argv.index("--resource-group") + 1], "rg-odaa-mhuser1")
+        self.assertEqual(argv[argv.index("--resource-group") + 1], "rg-odaa-shared")
+        self.assertEqual(argv[argv.index("--template-file") + 1],
+                         str(db.ROOT / "bicep/base-db-test.bicep"))
         self.assertNotIn("Secret_#12ABcd", argv)
         self.assertEqual(wait.call_count, 1)
-        self.assertIn("/resourceGroups/rg-odaa-mhuser1/providers/Oracle.Database/dbSystems/", wait.call_args.args[0])
+        self.assertTrue(wait.call_args.args[0].endswith("/resourceGroups/rg-odaa-shared/providers/Oracle.Database/dbSystems/basetest01"))
         rest.assert_not_called()
 
-    def test_cleanup_preserves_tagged_databases_outside_static_participant_groups(self):
+    def test_cleanup_preserves_tagged_databases_outside_shared_group(self):
         systems = [{"id": f"/subscriptions/{SUB}/resourceGroups/{group}/providers/Oracle.Database/dbSystems/test",
-                    "tags": db.TAGS} for group in ("rg-odaa-shared", "rg-odaa-user00", "rg-odaa-mhuser8")]
+                    "tags": db.TAGS} for group in ("rg-odaa-mhuser1", "rg-odaa-user00", "rg-odaa-mhuser8")]
         with patch.object(db, "listing", return_value=systems), patch.object(db, "rest") as rest:
             db.cleanup(SUB)
         rest.assert_not_called()
+
+    def test_static_database_scope_rejects_foreign_subscription_group_and_name(self):
+        with patch.dict(os.environ, BASE_DB_RESOURCE_GROUP="rg-odaa-shared", BASE_DB_NAME="basetest01"):
+            self.assertTrue(db.ids(SUB)[2].endswith("/dbSystems/basetest01"))
+            with self.assertRaises(ValueError):
+                db.ids("other")
+            for variable, value in (("BASE_DB_RESOURCE_GROUP", "rg-odaa-mhuser1"),
+                                    ("BASE_DB_NAME", "basetest00"), ("BASE_DB_NAME", "basetest08")):
+                with self.subTest(variable=variable, value=value), patch.dict(os.environ, {variable: value}), \
+                     self.assertRaises(ValueError):
+                    db.ids(SUB)
+
+    def test_create_rejects_existing_selected_database_before_deployment(self):
+        args = types.SimpleNamespace(subscription=SUB, zone="1", owner="new-run",
+                                     shape="VM.BaseDB.x86", version="26.0.0.0.0",
+                                     compute_model="ECPU", compute=4, storage=256)
+        with patch.dict(os.environ, BASE_DB_RESOURCE_GROUP="rg-odaa-shared", BASE_DB_NAME="basetest01"), \
+             patch.object(db, "metadata"), \
+             patch.object(db, "central_anchor", return_value=(ANCHOR, RESOURCE, anchor())), \
+             patch.object(db, "listing", return_value=[{"name": "BASETEST01"}]), \
+             patch.object(db, "command") as command, self.assertRaises(RuntimeError):
+            db.create(args)
+        command.assert_not_called()
 
 
 class SharedConfigTests(unittest.TestCase):
@@ -180,11 +209,21 @@ class SharedConfigTests(unittest.TestCase):
             self.assertEqual(len(config["participants"]), 7)
             self.assertEqual(user, {
                 "name": f"mhuser{number}", "vmResourceGroup": f"rg-vm-mhuser{number}",
-                "vmName": f"vm-mhuser{number}", "databaseResourceGroup": f"rg-odaa-mhuser{number}",
+                "vmName": f"vm-mhuser{number}", "databaseName": f"basetest{number:02}",
+                "workshopDatabaseName": f"basedb{number}",
             })
+            self.assertEqual(config["databaseResourceGroup"], "rg-odaa-shared")
         for key in ("00", "08", "user00"):
             with self.assertRaises(KeyError):
                 shared.participant(key)
+
+    def test_participant_cli_exports_shared_group_and_distinct_names(self):
+        for key in ("01", "02", "03", "04", "05", "06", "07"):
+            with self.subTest(key=key), patch.object(shared.sys, "argv", ["export_shared_config.py", "--participant", key]), \
+                 patch.dict(os.environ, {}, clear=True), contextlib.redirect_stdout(io.StringIO()) as output:
+                shared.main()
+            self.assertIn("BASE_DB_RESOURCE_GROUP=rg-odaa-shared\n", output.getvalue())
+            self.assertIn(f"BASE_DB_NAME=basetest{key}\n", output.getvalue())
 
     def test_cli_only_gets_valid_deployments_and_exports_guarded_outputs(self):
         ids = [f"/subscriptions/{SUB}/providers/Microsoft.Resources/deployments/stage-{number}"
@@ -236,6 +275,14 @@ class SharedConfigTests(unittest.TestCase):
         self.assertNotIn("terraform -chdir", test_workflow)
         self.assertIn("export_shared_config.py", test_workflow)
 
+    def test_dns_workflow_deploys_existing_zone_link_in_odaa_scope(self):
+        text = (db.ROOT.parent / ".github/workflows/odaa-deploy-oracle-dns.yml").read_text()
+        self.assertIn('parameters["oracleDnsZoneName"]["value"]', text)
+        self.assertIn("subscription-id: '4ce5b5cc-e869-451f-98fc-f50448849ee0'", text)
+        self.assertIn("--resource-group rg-odaa-shared", text)
+        self.assertNotIn("oracleDnsListeningIp", text)
+        self.assertNotIn("--resource-group rg-workshop-hub", text)
+
 
 class NetworkTests(unittest.TestCase):
     def setUp(self):
@@ -252,21 +299,20 @@ class NetworkTests(unittest.TestCase):
         }} for prefix in ("0.0.0.0/0", "192.168.0.0/24")]}}
         self.firewalls = [{"ipConfigurations": [{"privateIPAddress": ENV["TEST_FIREWALL_PRIVATE_IP"]}],
                            "dnsSettings": {"enableProxy": True, "servers": [ENV["TEST_HUB_RESOLVER_INBOUND_IP"]]}}]
-        self.rulesets = {"value": [{"id": "ruleset"}]}
+        self.zone = {"name": "actualvcn.example", "properties": {"provisioningState": "Succeeded"}}
         self.links = {"value": [{"properties": {
             "virtualNetwork": {"id": HUB}, "provisioningState": "Succeeded",
+            "virtualNetworkLinkState": "Completed", "registrationEnabled": False,
         }}]}
-        self.rules = {"value": [{"properties": {
-            "domainName": "actualvcn.example.", "forwardingRuleState": "Enabled",
-            "targetDnsServers": [{"ipAddress": ENV["TEST_ORACLE_DNS_LISTENING_IP"], "port": 53}],
-        }}]}
+        self.record = {"properties": {"aRecords": [{"ipv4Address": ENV["TEST_DB_IP"]}]}}
 
     def topology(self):
         with patch.dict(os.environ, ENV), patch.object(network, "arm", side_effect=[
-            self.vnet, self.table, self.rulesets, self.links, self.rules,
-        ]), \
+            self.vnet, self.table, self.zone, self.links, self.record,
+        ]) as arm, \
              patch.object(network, "command", return_value=json.dumps(self.firewalls)):
             network.topology()
+        self.assertEqual(arm.call_args.args[0], ZONE + "/A/node.actualsubnet")
 
     def test_hub_only_routes_custom_dns_and_firewall_proxy(self):
         self.topology()
@@ -277,8 +323,14 @@ class NetworkTests(unittest.TestCase):
             lambda: self.vnet["properties"]["virtualNetworkPeerings"][0]["properties"]["remoteVirtualNetwork"].update(id="oracle"),
             lambda: self.table["properties"]["routes"][1]["properties"].update(addressPrefix="192.168.0.0/16"),
             lambda: self.firewalls[0]["dnsSettings"].update(servers=["192.168.0.6"]),
-            lambda: self.rules["value"][0]["properties"].update(forwardingRuleState="Disabled"),
-            lambda: self.rules["value"][0]["properties"].update(targetDnsServers=[{"ipAddress": "192.168.0.99", "port": 53}]),
+            lambda: self.zone.update(name="wrong.example"),
+            lambda: self.zone["properties"].update(provisioningState="Failed"),
+            lambda: self.links["value"][0]["properties"].update(virtualNetworkLinkState="InProgress"),
+            lambda: self.links["value"][0]["properties"].update(registrationEnabled=True),
+            lambda: self.links["value"][0]["properties"]["virtualNetwork"].update(id="oracle"),
+            lambda: self.record["properties"].update(aRecords=[]),
+            lambda: self.record["properties"].update(aRecords=[{"ipv4Address": "192.168.0.99"}]),
+            lambda: self.record["properties"]["aRecords"].append({"ipv4Address": "192.168.0.99"}),
         ]
         for change in changes:
             self.setUp()
@@ -286,16 +338,26 @@ class NetworkTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.topology()
 
-    def test_dns_udp_tcp_forward_and_reverse_required(self):
+    def test_foreign_zone_rejected_before_arm_request(self):
+        for zone_id in (ZONE.replace(SUB, "other"), ZONE.rsplit("/", 1)[0] + "/", ZONE + "/A/node"):
+            with self.subTest(zone_id=zone_id), \
+                 patch.dict(os.environ, {**ENV, "TEST_ORACLE_DNS_ZONE_ID": zone_id}), \
+                 patch.object(network, "arm") as arm, self.assertRaises(ValueError):
+                network.replicated_zone()
+            arm.assert_not_called()
+
+    def test_replicated_dns_udp_tcp_through_resolver_and_firewall(self):
         calls = []
         def query(server, host, kind="A", tcp=False):
             calls.append((server, host, kind, tcp))
             return [ENV["TEST_DB_IP"]] if kind == "A" else ["authoritative SOA"]
         with patch.dict(os.environ, ENV), patch.object(network, "query", side_effect=query):
-            network.endpoint_dns()
+            network.replicated_dns()
         self.assertEqual(len(calls), 8)
-        self.assertIn((ENV["TEST_ORACLE_DNS_LISTENING_IP"], ENV["TEST_CENTRAL_DNS_ZONE_NAME"], "SOA", True), calls)
-        self.assertNotIn(ENV["TEST_FIREWALL_PRIVATE_IP"], [call[0] for call in calls])
+        for server in (ENV["TEST_HUB_RESOLVER_INBOUND_IP"], ENV["TEST_FIREWALL_PRIVATE_IP"]):
+            for tcp in (False, True):
+                self.assertIn((server, ENV["TEST_DB_HOST"], "A", tcp), calls)
+                self.assertIn((server, ENV["TEST_CENTRAL_DNS_ZONE_NAME"], "SOA", tcp), calls)
 
     def test_participant_dns_never_queries_resolver_or_oracle_directly(self):
         with patch.dict(os.environ, ENV), patch.object(network, "query", return_value=[ENV["TEST_DB_IP"]]) as query:
@@ -310,7 +372,8 @@ class NetworkTests(unittest.TestCase):
         with patch.dict(os.environ, ENV), patch.object(network, "query", return_value=["SOA"]) as query:
             network.hub_dns()
         self.assertEqual(query.call_count, 4)
-        self.assertNotIn(ENV["TEST_ORACLE_DNS_LISTENING_IP"], [call.args[0] for call in query.call_args_list])
+        self.assertEqual({call.args[0] for call in query.call_args_list},
+                         {ENV["TEST_HUB_RESOLVER_INBOUND_IP"], ENV["TEST_FIREWALL_PRIVATE_IP"]})
 
     def test_missing_or_wrong_dns_answer_fails_not_skips(self):
         for answer in ([], ["192.168.0.11"]):
@@ -318,8 +381,8 @@ class NetworkTests(unittest.TestCase):
                  self.assertRaises(ValueError):
                 network.dns()
 
-    def test_reverse_dns_mismatch_fails(self):
+    def test_replicated_diagnostic_also_requires_matching_central_azure_soa(self):
         with patch.dict(os.environ, ENV), patch.object(network, "query", side_effect=[
             *([[ENV["TEST_DB_IP"]]] * 4), ["hub SOA"], ["wrong SOA"],
         ]), self.assertRaises(ValueError):
-            network.endpoint_dns()
+            network.replicated_dns()

@@ -33,22 +33,6 @@ jobs:
           if address.version != 4 or not address.is_private:
               raise SystemExit("Fill the actual hub firewall private IPv4 address in static 04-oracle-network.bicepparam")
           '
-      - name: Map Seven Directory IDs
-        id: participants
-        env:
-          IDENTITY_OBJECT_IDS: ${{ needs.identity.outputs.user_object_ids }}
-        run: |
-          python3 -c '
-          import json, os
-          identity = json.loads(os.environ["IDENTITY_OBJECT_IDS"])
-          names = {"01":"mhuser1", "02":"mhuser2", "03":"mhuser3", "04":"mhuser4",
-                   "05":"mhuser5", "06":"mhuser6", "07":"mhuser7"}
-          if set(identity) != set(names):
-              raise SystemExit("Exactly seven verified directory IDs are required")
-          users = {names[key]: identity[key] for key in names}
-          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-              output.write("user_object_ids=" + json.dumps(users, separators=(",", ":")) + "\n")
-          '
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -57,12 +41,11 @@ jobs:
       - name: Deploy Oracle Network Only
         env:
           GROUP_ID: ${{ needs.identity.outputs.group_id }}
-          USER_OBJECT_IDS: ${{ steps.participants.outputs.user_object_ids }}
         run: |
           test -n "$GROUP_ID"
           az deployment sub create --name workshop-04-oracle-network --location francecentral \
             --subscription 4ce5b5cc-e869-451f-98fc-f50448849ee0 \
             --template-file infra/deployments/04-oracle-network.bicep \
             --parameters @"$RUNNER_TEMP/oracle-network.parameters.json" \
-              workshopGroupId="$GROUP_ID" userObjectIds="$USER_OBJECT_IDS" \
+              workshopGroupId="$GROUP_ID" \
             --output none

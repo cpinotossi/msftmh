@@ -93,12 +93,12 @@ def probe(smoke=False):
         config = json.loads(Path("base-db-config.json").read_text())
         if config["TEST_HUB_VNET_ID"].lower() != HUB_ID.lower():
             raise ValueError("Discovered DNS configuration belongs to a different hub")
-        keys = ("TEST_HUB_RESOLVER_INBOUND_IP", "TEST_ORACLE_DNS_LISTENING_IP",
+        keys = ("TEST_HUB_RESOLVER_INBOUND_IP", "TEST_FIREWALL_PRIVATE_IP",
                 "TEST_CENTRAL_DNS_ZONE_NAME", "TEST_DB_HOST", "TEST_DB_IP")
         config = {key: config[key] for key in keys}
     payload = base64.b64encode((db.ROOT / "network_probe.py").read_bytes()).decode()
     exports = "\n".join(f"export {key}={shlex.quote(value)}" for key, value in config.items())
-    mode, marker = ("--hub-dns", "HUB_DNS_OK") if smoke else ("--endpoint-dns", "BIDIRECTIONAL_DNS_OK")
+    mode, marker = ("--hub-dns", "HUB_DNS_OK") if smoke else ("--replicated-dns", "REPLICATED_DNS_OK")
     script = f"""set -eu
 cloud-init status --wait >/dev/null
 directory="$(mktemp -d)"

@@ -2,7 +2,7 @@
 load '/opt/bats-support/load'
 load '/opt/bats-assert/load'
 
-# Every topology/DNS value is exported from shared state or actual ARM/OCI reads.
+# Every topology/DNS value comes from canonical ARM deployments or actual ARM/OCI reads.
 
 db_property() {
   az rest --method GET \

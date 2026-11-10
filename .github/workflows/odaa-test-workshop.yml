@@ -16,10 +16,12 @@ on:
       db_shape:
         description: 'Exact regional Single Node shape'
         type: string
+        default: 'VM.BaseDB.x86'
         required: true
       db_version:
         description: 'Exact regional database version; no fallback'
         type: string
+        default: '26.0.0.0.0'
         required: true
       availability_zone:
         description: 'Must match the existing central network anchor zone'
@@ -28,9 +30,11 @@ on:
       compute_model:
         type: choice
         options: [ECPU, OCPU]
+        default: ECPU
         required: true
       compute_count:
         type: number
+        default: 4
         required: true
       storage_gb:
         type: number
@@ -65,6 +69,7 @@ jobs:
       vm_name: ${{ steps.participant.outputs.BASE_DB_VM_NAME }}
       vm_rg: ${{ steps.participant.outputs.BASE_DB_VM_RG }}
       db_rg: ${{ steps.participant.outputs.BASE_DB_RESOURCE_GROUP }}
+      db_name: ${{ steps.participant.outputs.BASE_DB_NAME }}
     steps:
       - name: Block before Phase B without login or Oracle access
         env:
@@ -91,6 +96,7 @@ jobs:
       BASE_DB_VM_NAME: ${{ needs.phase-b-guard.outputs.vm_name }}
       BASE_DB_VM_RG: ${{ needs.phase-b-guard.outputs.vm_rg }}
       BASE_DB_RESOURCE_GROUP: ${{ needs.phase-b-guard.outputs.db_rg }}
+      BASE_DB_NAME: ${{ needs.phase-b-guard.outputs.db_name }}
     steps:
       - uses: actions/checkout@v4
       - uses: azure/login@v2
@@ -151,8 +157,7 @@ jobs:
           for scope in \
             "/subscriptions/$WORKSHOP_SUBSCRIPTION_ID/resourceGroups/$BASE_DB_VM_RG" \
             "/subscriptions/$WORKSHOP_SUBSCRIPTION_ID/resourceGroups/rg-workshop-hub" \
-            "/subscriptions/$ODAA_SUBSCRIPTION_ID/resourceGroups/$BASE_DB_RESOURCE_GROUP" \
-            "/subscriptions/$ODAA_SUBSCRIPTION_ID/resourceGroups/rg-odaa-shared"; do
+            "/subscriptions/$ODAA_SUBSCRIPTION_ID/resourceGroups/$BASE_DB_RESOURCE_GROUP"; do
             subscription="${scope#/subscriptions/}"
             subscription="${subscription%%/*}"
             name="$(python3 -c 'import sys, uuid; print(uuid.uuid5(uuid.NAMESPACE_URL, sys.argv[1].lower()))' "$scope/$principal/reader")"
@@ -169,12 +174,12 @@ jobs:
         run: |
           [[ -n "$BASE_DB_SYS_PASSWORD" && -n "$BASE_DB_TEST_PASSWORD" && -n "$BASE_DB_SSH_PUBLIC_KEY" ]]
           [[ "$BASE_DB_SYS_PASSWORD" != "$BASE_DB_TEST_PASSWORD" ]]
-      - name: Create only the test DB in the selected participant RG
+      - name: Create only the selected participant test DB in the shared Oracle RG
         env:
           BASE_DB_SYS_PASSWORD: ${{ secrets.BASE_DB_SYS_PASSWORD }}
           BASE_DB_SSH_PUBLIC_KEY: ${{ vars.BASE_DB_SSH_PUBLIC_KEY }}
         run: python3 tests/base_database.py create
-      - name: Discover authoritative native Oracle DNS and PDB service (read-only)
+      - name: Discover actual Oracle endpoints and configure narrow client SQL ingress
         env:
           OCI_COMPARTMENT_ID: ${{ vars.OCI_COMPARTMENT_ID }}
           OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
@@ -182,10 +187,12 @@ jobs:
           OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
           OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
           OCI_CLI_REGION: eu-paris-1
-        run: python3 tests/base_database.py discover
+        run: |
+          python3 tests/base_database.py discover
+          python3 tests/base_database.py configure-network
       - name: Create private temporary hub DNS diagnostic VM
         run: python3 tests/hub_dns_diagnostic.py create
-      - name: Require UDP/TCP endpoint DNS and Oracle-to-Azure forwarding from the hub
+      - name: Require replicated database DNS through the resolver and firewall over UDP/TCP
         run: python3 tests/hub_dns_diagnostic.py probe
       - name: Run firewall-only participant DNS and real PDB SQL probes on the existing VM
         env:

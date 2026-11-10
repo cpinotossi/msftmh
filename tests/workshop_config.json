@@ -2,13 +2,21 @@
   "tenantId": "8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5",
   "workshopSubscriptionId": "aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483",
   "odaaSubscriptionId": "4ce5b5cc-e869-451f-98fc-f50448849ee0",
+  "databaseResourceGroup": "rg-odaa-shared",
+  "oracleSqlIngress": {
+    "sourceCidrs": [
+      "10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24", "10.0.4.0/24",
+      "10.0.5.0/24", "10.0.6.0/24", "10.0.7.0/24"
+    ],
+    "destinationPort": 1521
+  },
   "participants": {
-    "01": {"name": "mhuser1", "vmResourceGroup": "rg-vm-mhuser1", "vmName": "vm-mhuser1", "databaseResourceGroup": "rg-odaa-mhuser1"},
-    "02": {"name": "mhuser2", "vmResourceGroup": "rg-vm-mhuser2", "vmName": "vm-mhuser2", "databaseResourceGroup": "rg-odaa-mhuser2"},
-    "03": {"name": "mhuser3", "vmResourceGroup": "rg-vm-mhuser3", "vmName": "vm-mhuser3", "databaseResourceGroup": "rg-odaa-mhuser3"},
-    "04": {"name": "mhuser4", "vmResourceGroup": "rg-vm-mhuser4", "vmName": "vm-mhuser4", "databaseResourceGroup": "rg-odaa-mhuser4"},
-    "05": {"name": "mhuser5", "vmResourceGroup": "rg-vm-mhuser5", "vmName": "vm-mhuser5", "databaseResourceGroup": "rg-odaa-mhuser5"},
-    "06": {"name": "mhuser6", "vmResourceGroup": "rg-vm-mhuser6", "vmName": "vm-mhuser6", "databaseResourceGroup": "rg-odaa-mhuser6"},
-    "07": {"name": "mhuser7", "vmResourceGroup": "rg-vm-mhuser7", "vmName": "vm-mhuser7", "databaseResourceGroup": "rg-odaa-mhuser7"}
+    "01": {"name": "mhuser1", "vmResourceGroup": "rg-vm-mhuser1", "vmName": "vm-mhuser1", "databaseName": "basetest01", "workshopDatabaseName": "basedb1"},
+    "02": {"name": "mhuser2", "vmResourceGroup": "rg-vm-mhuser2", "vmName": "vm-mhuser2", "databaseName": "basetest02", "workshopDatabaseName": "basedb2"},
+    "03": {"name": "mhuser3", "vmResourceGroup": "rg-vm-mhuser3", "vmName": "vm-mhuser3", "databaseName": "basetest03", "workshopDatabaseName": "basedb3"},
+    "04": {"name": "mhuser4", "vmResourceGroup": "rg-vm-mhuser4", "vmName": "vm-mhuser4", "databaseName": "basetest04", "workshopDatabaseName": "basedb4"},
+    "05": {"name": "mhuser5", "vmResourceGroup": "rg-vm-mhuser5", "vmName": "vm-mhuser5", "databaseName": "basetest05", "workshopDatabaseName": "basedb5"},
+    "06": {"name": "mhuser6", "vmResourceGroup": "rg-vm-mhuser6", "vmName": "vm-mhuser6", "databaseName": "basetest06", "workshopDatabaseName": "basedb6"},
+    "07": {"name": "mhuser7", "vmResourceGroup": "rg-vm-mhuser7", "vmName": "vm-mhuser7", "databaseName": "basetest07", "workshopDatabaseName": "basedb7"}
   }
 }

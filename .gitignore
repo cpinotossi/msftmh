@@ -79,8 +79,10 @@ profile_default/
 ipython_config.py
 
 # ==============================================================================
-# Terraform
+# Legacy Terraform safety exclusions (not an active deployment dependency)
 # ==============================================================================
+# Keep these guards: old state, variables and provider caches may still contain
+# credentials. They must not be committed if copied back from a private archive.
 # State files
 *.tfstate
 *.tfstate.*
@@ -100,8 +102,6 @@ terraform.rc
 # Variable files (may contain sensitive data)
 *.tfvars
 *.tfvars.json
-# Exception: users/terraform.tfvars is the deploy workflow trigger (no secrets)
-!infra/users/terraform.tfvars
 
 # Plan files
 *.tfplan
@@ -143,6 +143,11 @@ __azurite_db*__.json
 # ==============================================================================
 # Credentials and secrets
 # ==============================================================================
+# Workspace-local private files and database credentials; never commit
+.workshop-secrets/
+sys-password
+test-password
+
 # OCI credentials
 **/.oci/
 
@@ -174,6 +179,9 @@ kubeconfig-*
 # ==============================================================================
 # Project-specific
 # ==============================================================================
+# Generated agent research is not deployment source or current documentation.
+.copilot-tracking/
+
 # Oracle on Azure specific
 misc/
 **/mis/

@@ -111,8 +111,10 @@ No storage-controller-specific Oracle tool changes were identified:
   provide network connectivity to a remote database.
 * [SQLcl](https://docs.oracle.com/en/database/oracle/sql-developer-command-line/26.3/sqcug/working-sqlcl.html)
   uses Java/JDBC; Java 21 remains installed.
-* [python-oracledb Thin mode](https://python-oracledb.readthedocs.io/en/latest/user_guide/installation.html)
-  connects over the network without Oracle Client libraries.
+* [python-oracledb Thick mode](https://python-oracledb.readthedocs.io/en/latest/user_guide/initialization.html)
+  uses the installed Instant Client for the BaseDB Native Network Encryption
+  and Data Integrity requirements. Workshop SQL scripts initialize this mode
+  explicitly; Thin mode cannot satisfy that database requirement.
 * [rwloadsim/connping](https://github.com/oracle/rwloadsim)
   require an Oracle Client environment and access to a database.
 
@@ -173,8 +175,8 @@ It is not a read-only validation command.
 
 > [!WARNING]
 > The following commands create billable cloud resources. Run them only after
-> deployment approval and gallery creation. Do not overwrite an existing image
-> version; use a new semantic version for later builds.
+> deployment approval and gallery creation. Use a new semantic version for
+> each image build.
 
 ```bash
 az login --tenant 8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5

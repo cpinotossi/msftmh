@@ -15,6 +15,10 @@ param userObjectIds ParticipantIdentities
 @minLength(36)
 @maxLength(36)
 param workshopGroupId string
+@description('Organizer Entra user object ID for administrative login to all seven participant VMs.')
+@minLength(36)
+@maxLength(36)
+param organizerObjectId string
 param firewallPrivateIp string
 
 var participants = [
@@ -80,6 +84,7 @@ module access './modules/spoke-access.bicep' = [for (participant, i) in particip
   scope: groups[i]
   params: {
     userObjectId: userObjectIds[participant.name]
+    organizerObjectId: organizerObjectId
   }
 }]
 

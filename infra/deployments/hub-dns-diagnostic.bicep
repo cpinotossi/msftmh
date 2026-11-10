@@ -36,7 +36,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           protocol: '*'
           sourceAddressPrefix: '*'
           sourcePortRange: '*'
-          destinationAddressPrefixes: ['10.100.0.4', '10.100.0.132', '192.168.0.0/24']
+          destinationAddressPrefixes: ['10.100.0.4', '10.100.0.132']
           destinationPortRange: '53'
         }
       }

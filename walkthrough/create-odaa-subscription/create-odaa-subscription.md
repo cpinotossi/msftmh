@@ -1,235 +1,101 @@
 ---
-title: Understand the Oracle Database@Azure subscription
-description: Review the subscription and cloud linkage used by the Base Database workshop.
+title: Understand the existing Oracle Database@Azure subscription
+description: Inspect the organizer-managed Marketplace and OCI linkage without purchasing resources.
 ---
 
 ## Challenge 1: Understand the ODAA subscription
 
-[Back to workspace README](../../README.md)
+[Workshop overview](../../README.md)
 
-> [!NOTE]
-> This is a theoretical challenge. The organizer purchases and activates one
-> OracleSubscription in `4ce5b5cc-e869-451f-98fc-f50448849ee0`; participants
-> do not make Marketplace purchases or modify it. Proceed to database creation
-> only when provisioning is `Succeeded` and the linked cloud account is
-> `Available`. Azure-only hub/spoke preparation can run while onboarding waits.
+> [!WARNING]
+> **User2 is only an example.** Replace `mhuser2`, `vm-mhuser2`,
+> `rg-vm-mhuser2` and `basedb2` with your own assigned user
+> number and resource names. Tenant, subscriptions, shared networking and PDB
+> `WORKSHOP` stay the same.
 
-##  ODAA Main Components
+This challenge is read-only. The organizer has already completed Marketplace
+onboarding and linked the existing OCI tenancy. Participants must not purchase
+another offer, create another OCI account, unlink the tenancy or delete the
+OracleSubscription.
 
-1. ODAA Subscription, which is a container that contains the different Oracle Database Services and defines the commercial aspects of the service
-2. ODAA Database service. These are the database services that are used to run Oracle Database on Azure
+## Current subscription boundaries
 
-Without an ODAA Subscription, you cannot create any ODAA Database services.
+| Resource | Location |
+|----------|----------|
+| Tenant | `8fd3e0b6-0302-4084-a31f-1dfc5bbd03f5` |
+| Hub, Bastion, firewall, resolver and seven private client VMs | Workshop subscription `aca3d6b0-497a-40cc-bdd0-e8e3ef6d8483` |
+| OracleSubscription `default`, anchors, Oracle VNet and BaseDB systems | ODAA subscription `4ce5b5cc-e869-451f-98fc-f50448849ee0` |
+| Shared Oracle resource group and replicated Azure private DNS zone | `rg-odaa-shared` in the ODAA subscription |
 
-### Component Hierarchy Diagram
-
-```mermaid
-flowchart TB
-    subgraph Azure["Azure"]
-        subgraph AzureSub["Azure Subscription"]
-            subgraph ODAAS["ODAA Subscription<br/>(Container & Commercial Terms)"]
-                DB1["Oracle Database Service 1<br/>(Base Database)"]
-                DB2["Oracle Database Service 2<br/>(e.g., Exadata DB)"]
-                DB3["Oracle Database Service N"]
-            end
-        end
-    end
-
-    style Azure fill:#0078D4,color:#fff
-    style AzureSub fill:#50E6FF,color:#000
-    style ODAAS fill:#C74634,color:#fff
-    style DB1 fill:#F5DEB3,color:#000
-    style DB2 fill:#F5DEB3,color:#000
-    style DB3 fill:#F5DEB3,color:#000
-```
-
-> **Key Concept**: The ODAA Subscription acts as a container that must exist before you can create any Oracle Database services within it.
-
-##  Prerequisites
-
-To create an ODAA Subscription, you will need an Azure subscription with permissions to purchase resources from the Azure Marketplace.
-In addition, the subscriptions must have the following Microsoft Providers registered:
-
-- Oracle.Database
-- Microsoft.BareMetal
-- Microsoft.Network
-- Microsoft.Compute
-
-This can be done by following the instructions in 
-* [Oracle’s resource provider registration guide](https://docs.oracle.com/en-us/iaas/Content/database-at-azure/oaaprerequisites.htm#register-resource-providers)
-* [Network planning for Oracle Database@Azure](https://learn.microsoft.com/en-us/azure/oracle/oracle-db/oracle-database-network-plan)
-
-
-The organizer checks provider registration at subscription scope. Participants
-can inspect it using their Reader permissions but must not register providers
-or change shared networking.
-
-1. Open ODAA subscription `4ce5b5cc-e869-451f-98fc-f50448849ee0`.
-2. In the subscription view you find under the menu setting the sub menue Resource Providers.
-3. Click on the Resource Providers and search for the Providers
-![Overview Resource Providers](media/resource_provider.jpg)
-
-
-###  Permissions for Onboarding and Provisioning ODAA
-
-Many of the tasks you perform during ODAA Subscription onboarding require permissions in either the Azure cloud or the Oracle Cloud Infrastructure (OCI) cloud. Review the following link that details the permissions you need for each task of the onboarding process:
-
-- [Oracle Documentation Permissions for Onboarding and Provisioning ODAA Services](https://docs.oracle.com/en-us/iaas/Content/database-at-azure/oaaprerequisites.htm#permissions)
-
-##  ODAA Subscription purchase options
-
-You can purchase ODAA Subscription directly from the [Azure Marketplace](https://marketplace.microsoft.com/en-us/product/saas/oracle.oracle_database_at_azure?tab=Overview).
-
-![ODAA Subscription offer in Azure Marketplace](media/odaa-marketplace-offer.jpeg)
-
-The Marketplace offers two purchasing options:
-
-1. Public offer, available to all Azure customers
-2. Private offer, available only to enterprise customers who have negotiated specific terms with Oracle
-
-> [!IMPORTANT]
-> This workshop uses the public PAYG offer. A purchase or a resource in
-> `Accepted` state is not proof that onboarding is complete.
-
-##  Purchase ODAA Subscription via Public Offer
-
-When you purchase an ODAA Subscription through the public offer, you can choose between two licensing options:
-
-1. Bring your own license (BYOL)
-2. Pay-as-you-go (PAYG)
-
-![ODAA Purchase Options in Azure Marketplace](media/odaa-marketplace-purchase-options.jpeg)
-
-With BYOL, you can use your existing Oracle Database licenses to run the service, while with PAYG, you pay for the service based on your usage.
-
-###  Onboarding ODAA Subscription via Public Offer
-
-You can find the official Oracle documentation about onboarding ODAA Subscription in [Oracle's PAYG onboarding guide](https://docs.oracle.com/en-us/iaas/Content/database-at-azure/onboard-purchase.htm#purchase-payg-offer).
-
-To use the ODAA Subscription, you configure it within your Azure subscription through a process referred to as [onboarding](https://docs.oracle.com/en-us/iaas/Content/database-at-azure/oaaonboard.htm).
-
-#### Onboarding Process Overview
+Only the ODAA subscription is approved for the workshop's Oracle Marketplace
+integration. BaseDB resources must not be moved to the client subscription.
+The linked OCI region is `eu-paris-1`; the Azure deployment region is
+`francecentral`. These identifiers describe different control planes.
 
 ```mermaid
 flowchart LR
-    A["1⃣ Purchase<br/>Azure Marketplace"] --> B["2⃣ Select<br/>Licensing Option"]
-    B --> C["3⃣ Link to<br/>OCI Tenancy"]
-    C --> D["4⃣ Configure<br/>Account Details"]
-    D --> E["5⃣ Activate<br/>ODAA Subscription"]
-    E --> F["Ready to<br/>Create Databases"]
-
-    style A fill:#0078D4,color:#fff
-    style B fill:#50E6FF,color:#000
-    style C fill:#C74634,color:#fff
-    style D fill:#F25022,color:#fff
-    style E fill:#7FBA00,color:#fff
-    style F fill:#00A4EF,color:#fff
+    A["Azure OracleSubscription default"] --- B["Existing linked OCI tenancy"]
+    A --- C["Shared Resource Anchor and Network Anchor"]
+    C --- D["BaseDB systems in rg-odaa-shared"]
+    E["Workshop hub and private VM spokes"] --- C
 ```
 
-![ODAA Onboarding Process](media/odaa-onboarding-overview.jpeg)
+## Inspect readiness
 
-> **NOTE**: We need to select a subscription on the screenshot, as shown. The ODAA Subscription itself is not aligned to any Azure Region, but the database services created under the ODAA Subscription will be aligned to the Azure Region selected during onboarding.
+After [account setup](../setup-user-account/setup-user-account.md), inspect the
+existing integration in the Azure portal:
 
-You complete the purchase through Azure Marketplace. After the purchase is complete, you link your Azure subscription with an OCI tenancy. This is called multicloud linking.
+1. Search for **Oracle AI Database@Azure** and open the service.
+2. Open **Oracle subscriptions** and select `default` in subscription `odaa`
+   (`4ce5b5cc-e869-451f-98fc-f50448849ee0`).
+3. On **Overview**, open **JSON View**.
+4. Under `properties`, inspect `provisioningState` and `cloudAccountState`.
+   Do not change any settings.
 
-Source: [Oracle Docs ODAA Overview](https://docs.oracle.com/en-us/iaas/Content/database-at-azure/overview.htm)
+Required states are:
 
-Final step of the ODAA Subscription creation:
-![ODAA Onboarding Process](media/odaa-onboarding-final-step.jpeg)
+* OracleSubscription provisioning: `Succeeded`
+* Linked cloud account: `Available`
 
-During the deployment of the ODAA Subscription:
-![ODAA Onboarding Process](media/odaa-service-deployment-progress.jpeg)
+Provider registration, catalog availability, quota, regional capacity,
+permissions and pricing are part of the organizer's preparation.
 
-After the deployment is complete:
-![ODAA Onboarding Process](media/odaa-service-deployment-complete.jpeg)
+## Responsibility and permissions
 
-Now you can see the ODAA Subscription in your Azure portal where you can create ODAA Database services under this ODAA Subscription.
-![ODAA Onboarding Process](media/odaa-service-portal-view.jpeg)
+The participant group can inspect the Oracle resources and required catalog
+details. BaseDB management rights do not grant OCI networking administration.
+The organizer maintains native DNS replication, the hub link and Oracle's
+default network rules. Participants add their own client SQL ingress in the
+separate [network security challenge](../configure-odaa-basedb-nsg/configure-odaa-basedb-nsg.md).
 
-###  ODAA Multicloud Linking
+Before the workshop, the organizer must arrange browser-based OCI read access
+for participants in the existing linked tenancy. Participants need to view
+their DB system, its node networking details and its PDB connection details.
+Azure BaseDB management permissions alone do not grant this OCI access.
+Participants retrieve their own full hostname, private IP and PDB service
+in the [DNS challenge](../verify-odaa-basedb-dns/verify-odaa-basedb-dns.md)
+and the [Easy Connect challenge](../connect-odaa-basedb/connect-odaa-basedb.md);
+the organizer does not supply these values.
 
-To finish the ODAA Subscription onboarding, you will need an OCI account. This is needed because some components of the ODAA databases need to be configured via the Oracle Cloud Infrastructure (OCI) even if the physical hardware runs inside Azure Data Centers.
+Use the OCI Console in your browser. Do not copy OCI CLI credentials to
+participant VMs or share organizer credentials. Participant access does not
+include general administration of the shared OCI network. It permits security
+rule changes on the tagged workshop NSG only.
 
-You perform most onboarding tasks only once, during your ODAA Subscription deployment. After you complete the onboarding tasks, you can begin provisioning and using ODAA database resources in your Azure environment.
+The participant databases use Standard Edition, which is sufficient for the
+workshop's networking and read-only SQL exercises.
 
-#### Multicloud Architecture Diagram
+## Success criteria
 
-```mermaid
-flowchart TB
-    subgraph Azure["Microsoft Azure"]
-        subgraph AzureSub["Azure Subscription"]
-            Portal["Azure Portal<br/>(Primary Management)"]
-            ODAAS["📦 ODAA Subscription"]
-            Hardware["Oracle Hardware<br/>(In Azure Data Center)"]
-        end
-    end
+* You can distinguish Azure subscription, OracleSubscription and OCI tenancy.
+* The readiness check confirms `Succeeded` / `Available`.
+* You know which resources belong in each subscription.
+* No purchase or onboarding mutation was performed.
 
-    subgraph OCI["Oracle Cloud Infrastructure"]
-        subgraph OCITenancy["OCI Tenancy"]
-            Console["OCI Console<br/>(Oracle-Specific Config)"]
-            OracleServices["Oracle Services<br/>(Backup, Patching, etc.)"]
-        end
-    end
+Next: [Create a Base Database](../create-odaa-basedb/create-odaa-basedb.md).
 
-    Portal <--> |"Multicloud Link"| Console
-    ODAAS <--> |"Service Integration"| OracleServices
-    Hardware <--> |"Management"| OracleServices
+## Organizer references
 
-    User(["Administrator"]) --> Portal
-    User -.-> |"Some configs"| Console
-
-    style Azure fill:#0078D4,color:#fff
-    style AzureSub fill:#50E6FF,color:#000
-    style OCI fill:#C74634,color:#fff
-    style OCITenancy fill:#F5DEB3,color:#000
-    style Portal fill:#fff,color:#000
-    style Console fill:#fff,color:#000
-    style ODAAS fill:#FFB900,color:#000
-    style Hardware fill:#7FBA00,color:#fff
-    style OracleServices fill:#F25022,color:#fff
-```
-
-> **Key Concept**: While Oracle hardware runs physically inside Azure Data Centers, some Oracle-specific configurations (like backup policies, patching schedules) are managed through the OCI Console. The multicloud link connects your Azure subscription to an OCI tenancy.
-
-Whether you create a new OCI account or link an existing account depends on your situation. Learn more about the Multicloud Linking here:
-
-- [Linking your Azure subscription with an OCI tenancy](https://docs.oracle.com/en-us/iaas/Content/database-at-azure/onboard-link.htm)
-
-The following shows how we linked our newly created public offer ODAA Subscription with a new OCI account as an example.
-
-1. Select the "View Oracle Subscription" button on the ODAA Subscription Overview page in the Azure portal.
-![An image of the Azure portal showing the ODAA Subscription overview page.](media/odaa-subscription-view-oracle-button.jpeg)
-
-2. Select the newly created ODAA Subscription called "default".
-![An image of the Azure portal showing the Oracle purchase details page.](media/odaa-subscription-select-default.jpeg)
-
-3. On the Oracle Subscription detail page, select "Oracle Cloud Account" from the left-hand menu.
-![An image of the Azure portal showing the Oracle purchase details page.](media/odaa-subscription-account-menu.jpeg)
-
-4. Select the link "Create new Oracle Cloud Account on OCI".
-![An image of the Azure portal showing the Oracle purchase page with the option to create a new OCI account.](media/odaa-subscription-create-oci-link.jpeg)
-
-5. Enter details to create a new OCI account on the Oracle Cloud Infrastructure Portal.
-![An image of the Azure portal showing new account admin configuration.](media/oci-account-admin-details.jpeg)
-
-6. Message after submitting the new OCI account creation form.
-![An image of the Azure portal showing the Oracle purchase page with the Oracle Cloud account successfully validated.](media/oci-account-validation-message.jpeg)
-
-7. Go back to the Azure portal and refresh the Oracle Subscription page.
-![An image of the Azure portal showing the Oracle purchase page with the Oracle Cloud account successfully validated.](media/odaa-subscription-account-menu.jpeg)
-
-8. After a while, the Status will switch from "Pending" to "Activated".
-![An image of the Azure portal showing the Oracle purchase page with the Oracle Cloud account successfully validated.](media/odaa-subscription-activated-status.jpeg)
-
-##  Purchase ODAA Subscription via Private Offer (Enterprise)
-
-To purchase an ODAA Subscription via Private Offer, contact the Oracle sales team or your Oracle sales representative for a sales offer. Oracle Sales creates an Azure private offer in Azure Marketplace for your instance of the service. After an offer is created for your organization, you can accept the offer and complete the purchase in the marketplace in the Azure portal. For more information about Azure private offers, see [Overview of the commercial marketplace and enterprise procurement](https://learn.microsoft.com/en-us/marketplace/what-is-commercial-marketplace).
-
-- [Oracle Docs ODAA Subscription private offer](https://docs.oracle.com/en-us/iaas/Content/database-at-azure/onboard-purchase.htm#purchase-private-offer)
-
-##  Billing Information
-
-Billing and payment for the service is processed through Azure for public and private offers. Payment for ODAA Subscription counts toward Microsoft Azure Consumption Commitment (MACC). Existing Oracle Database software customers can use a bring-your-own-license (BYOL) option or an unlimited license agreement (ULA). On your regular invoice for Azure, charges for ODAA Subscription appear with charges for your other Azure Marketplace services.
-([source](https://learn.microsoft.com/en-us/azure/oracle/oracle-db/oracle-database-get-started#purchase-oracle-databaseazure))
-
-[Back to workspace README](../../README.md)
+* [Oracle onboarding prerequisites](https://docs.oracle.com/en-us/iaas/Content/database-at-azure/oaaprerequisites.htm)
+* [Link an existing OCI tenancy](https://docs.oracle.com/en-us/iaas/Content/database-at-azure/onboard-link.htm)
+* [Independent organizer deployments](../../infra/deployments/README.md)
